@@ -1,23 +1,89 @@
-<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>專案計畫人員_雇主負擔保險費查詢</title><script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script><style>*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#26364a;font-family:"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif}.header{background:#12395b;color:#fff;padding:26px 20px;text-align:center}.header h1{margin:0;font-size:26px}.header p{margin:8px 0 0;font-size:14px}.container{max-width:1250px;margin:28px auto;padding:0 18px}.card{background:#fff;border-radius:14px;box-shadow:0 4px 18px rgba(25,55,85,.08);padding:22px;margin-bottom:20px}.search-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.field{flex:1;min-width:210px}.month-field{max-width:245px}label{display:block;font-weight:700;margin-bottom:8px}input{width:100%;padding:12px 14px;border:1px solid #c9d4df;border-radius:8px;font-size:16px;outline:none;background:#fff}button{border:0;border-radius:8px;padding:12px 22px;font-size:16px;font-weight:700;cursor:pointer;background:#17639a;color:#fff}button:hover{background:#104e7c}.export-btn{background:#4f7f52}.export-btn:hover{background:#3f673f}.hint{font-size:13px;color:#6b7785;margin-top:8px}.notice{margin-top:14px;padding:11px 14px;background:#f7f3e8;border-left:4px solid #c7a24a;border-radius:0 7px 7px 0;color:#5e5339;font-size:14px;line-height:1.6}.summary{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px}.badge{background:#eef4f8;border-radius:8px;padding:9px 13px;font-size:14px}.badge strong{color:#12395b}.project{border-left:5px solid #17639a;padding:12px 15px;margin:18px 0 12px;background:#f5f9fc;border-radius:0 8px 8px 0}.project-title{font-weight:700;color:#12395b;line-height:1.6}.table-wrap{overflow-x:auto;border:1px solid #e0e6ec;border-radius:9px}table{border-collapse:collapse;width:100%;min-width:1080px}th,td{text-align:center;vertical-align:middle}th{background:#e9f0f6;color:#243b53;font-weight:700;white-space:nowrap}th,td{padding:10px 9px;border-bottom:1px solid #e6ebef;font-size:14px}.money{white-space:nowrap}.empty{padding:30px;text-align:center;color:#77828d}.result-toolbar{display:flex;justify-content:flex-end;margin-top:15px}.footer{text-align:center;color:#8a96a3;font-size:12px;padding:10px 20px 30px}@media(max-width:700px){.header h1{font-size:21px}.container{margin-top:16px}.card{padding:16px}.field,.month-field{max-width:none;min-width:100%}button{width:100%}}
-.word-btn{background:#7a5a20}.word-btn:hover{background:#624817}.result-toolbar{display:flex;justify-content:flex-end;gap:10px;margin-top:15px;flex-wrap:wrap}
-</style></head><body><header class="header"><h1>專案計畫人員_雇主負擔保險費查詢</h1></header><main class="container"><section class="card"><div class="search-row"><div class="field"><label for="handler">業務承辦人</label><input id="handler" maxlength="20" autocomplete="off" placeholder="例如：1234"><div class="hint">請輸入業務承辦人身分證號後4碼及保險年月查詢</div></div><div class="field month-field"><label for="startMonth">起始保險年月</label><input id="startMonth" type="month"><div class="hint">例如：2026年08月</div></div><div class="field month-field"><label for="endMonth">結束保險年月</label><input id="endMonth" type="month"><div class="hint">例如：115年09月</div></div><button id="searchBtn">查詢</button></div><div class="notice">當月保險費請於次月月底查詢，例如115年1月保險費於115年2月底可提供查詢。</div></section><section id="result" class="card" style="display:none"></section></main><div class="footer">資料來源：資料頁｜本頁面僅提供查詢功能</div><script>
-const DATA_FILE='./專案計畫人員保費查詢.xlsx',DATA_SHEET='資料頁';let allData=[],lastRows=[];const $=id=>document.getElementById(id),norm=v=>String(v??'').trim().toLowerCase();
-function monthValue(v){let s=String(v??'').trim().replace(/[^0-9]/g,'');if(!s)return null;if(s.length>=5){let y=parseInt(s.slice(0,3),10),m=parseInt(s.slice(3,5),10);if(y&&m>=1&&m<=12)return y*100+m}return null}
-function fmtMonth(v){let n=monthValue(v);return n===null?'':`${Math.floor(n/100)}年${String(n%100).padStart(2,'0')}月`}
-function inputMonthValue(v){if(!v)return null;let m=v.match(/^(\d{4})-(\d{2})$/);return m?(parseInt(m[1])-1911)*100+parseInt(m[2]):null}
-function fmtInput(v){let n=inputMonthValue(v);return n?`${Math.floor(n/100)}年${String(n%100).padStart(2,'0')}月`:''}
-function money(v){let n=Number(String(v??'').replace(/,/g,''));return Number.isFinite(n)?n.toLocaleString('zh-TW'):String(v??'')}
-function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function loadData(){try{let r=await fetch(DATA_FILE+'?v='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error();let b=await r.arrayBuffer(),w=XLSX.read(b,{type:'array'});let s=w.Sheets[DATA_SHEET];if(!s)throw Error();allData=XLSX.utils.sheet_to_json(s,{defval:''})}catch(e){allData=[]}}
-function handlerName(rows){let n=[...new Set(rows.map(r=>String(r['業務承辦人姓名']??'').trim()).filter(Boolean))];return n.join('、')||'未提供姓名'}
-function search(){let key=norm($('handler').value),st=inputMonthValue($('startMonth').value),en=inputMonthValue($('endMonth').value),res=$('result');res.style.display='block';if(!key){res.innerHTML='<div class="empty">請先輸入業務承辦人身分證號後4碼。</div>';return}if(st&&en&&st>en){res.innerHTML='<div class="empty">起始保險年月不可晚於結束保險年月，請重新選擇。</div>';return}if(!allData.length){res.innerHTML='<div class="empty">目前無法載入資料，請確認 Excel 檔案已與網頁放在同一資料夾。</div>';return}let rows=allData.filter(r=>{if(norm(r['業務承辦人證號'])!==key)return false;let mv=monthValue(r['保險年月']);return mv!==null&&(!st||mv>=st)&&(!en||mv<=en)});lastRows=rows;if(!rows.length){res.innerHTML='<div class="empty">查無符合條件的資料。</div>';return}let name=handlerName(rows),groups=new Map();rows.forEach(r=>{let p=String(r['計畫名稱']??'').trim()||'未填列計畫名稱';if(!groups.has(p))groups.set(p,[]);groups.get(p).push(r)});let tl=0,tr=0,th=0,seq=0,out=`<div class="summary"><div class="badge">業務承辦人：<strong>${esc(name)}</strong></div><div class="badge">保險年月：<strong>${st||en?`${esc(fmtInput($('startMonth').value)||'不限')} ～ ${esc(fmtInput($('endMonth').value)||'不限')}`:'全部'}</strong></div><div class="badge">查詢筆數：<strong>${rows.length}</strong></div><div class="badge">計畫數：<strong>${groups.size}</strong></div></div>`;for(let [p,list] of groups){out+=`<div class="project"><div class="project-title">專案計畫名稱：${esc(p)}</div></div><div class="table-wrap"><table><thead><tr><th>序號</th><th>單位</th><th>姓名</th><th>保險年月</th><th>投保薪額</th><th>勞工保險費</th><th>勞工退休金提繳</th><th>全民健康保險費</th><th>異動</th><th>備註</th></tr></thead><tbody>`;for(let r of list){seq++;let l=Number(r['勞工保險費'])||0,rt=Number(r['勞工退休金提繳'])||0,h=Number(r['全民健康保險費'])||0;tl+=l;tr+=rt;th+=h;out+=`<tr><td>${seq}</td><td>${esc(r['單位'])}</td><td>${esc(r['姓名'])}</td><td>${esc(fmtMonth(r['保險年月']))}</td><td class="money">${esc(money(r['投保薪額']))}</td><td class="money">${esc(money(r['勞工保險費']))}</td><td class="money">${esc(money(r['勞工退休金提繳']))}</td><td class="money">${esc(money(r['全民健康保險費']))}</td><td>${esc(r['異動'])}</td><td>${esc(r['備註'])}</td></tr>`}out+='</tbody></table></div>'}out+=`<div class="summary" style="margin-top:15px"><div class="badge">勞保費合計：<strong>${tl.toLocaleString('zh-TW')}</strong></div><div class="badge">勞退提繳合計：<strong>${tr.toLocaleString('zh-TW')}</strong></div><div class="badge">健保費合計：<strong>${th.toLocaleString('zh-TW')}</strong></div><div class="badge">三項合計：<strong>${(tl+tr+th).toLocaleString('zh-TW')}</strong></div></div><div class="result-toolbar"><button class="export-btn" onclick="exportExcel()">匯出 Excel</button><button class="word-btn" onclick="exportAllocationDoc()">匯出支出科目分攤表</button></div>`;res.innerHTML=out}
-function exportExcel(){if(!lastRows.length){alert('目前沒有可匯出的查詢結果。');return}let name=handlerName(lastRows),rows=lastRows.map((r,i)=>({'序號':i+1,'單位':r['單位']??'','姓名':r['姓名']??'','保險年月':fmtMonth(r['保險年月']),'投保薪額':Number(r['投保薪額'])||0,'勞工保險費':Number(r['勞工保險費'])||0,'勞工退休金提繳':Number(r['勞工退休金提繳'])||0,'全民健康保險費':Number(r['全民健康保險費'])||0,'異動':r['異動']??'','備註':r['備註']??'','業務承辦人姓名':name}));let ws=XLSX.utils.json_to_sheet(rows);ws['!cols']=[{wch:8},{wch:22},{wch:14},{wch:14},{wch:14},{wch:16},{wch:20},{wch:20},{wch:18},{wch:25},{wch:18}];let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'查詢結果');XLSX.writeFile(wb,`專案計畫人員保費查詢_${name}_${fmtInput($('startMonth').value)||'不限'}-${fmtInput($('endMonth').value)||'不限'}.xlsx`)}
-
-function num(v){let n=Number(String(v??'').replace(/,/g,''));return Number.isFinite(n)?n:0}
-function groupRowsByProjectMonth(rows){let groups=new Map();rows.forEach(r=>{let p=String(r['計畫名稱']??'').trim()||'未填列計畫名稱',mv=monthValue(r['保險年月']),key=p+'||'+mv;if(!groups.has(key))groups.set(key,{project:p,month:mv,rows:[]});groups.get(key).rows.push(r)});return [...groups.values()]}
-function chineseAmount(n){n=Math.round(Number(n)||0);if(n===0)return'零元整';const d=['零','壹','貳','參','肆','伍','陸','柒','捌','玖'],u=['','拾','佰','仟'],big=['','萬','億','兆'];function sec(x){let a=[],zero=false;for(let i=0;i<4;i++){let v=x%10;x=Math.floor(x/10);if(v){if(zero&&a.length)a.unshift('零');a.unshift(d[v]+u[i]);zero=false}else if(a.length)zero=true}return a.join('')}let parts=[],i=0;while(n>0){let x=n%10000;n=Math.floor(n/10000);if(x){let z=sec(x);if(i>0)z+=big[i];parts.unshift(z)}i++}return parts.join('').replace(/零+/g,'零')+'元整'}
-function buildAllocationPage(g,index,totalPages){let labor=g.rows.reduce((a,r)=>a+num(r['勞工保險費']),0),retire=g.rows.reduce((a,r)=>a+num(r['勞工退休金提繳']),0),health=g.rows.reduce((a,r)=>a+num(r['全民健康保險費']),0),total=labor+retire+health,br=index<totalPages-1?' page-break':'';return `<section class="allocation-page${br}"><div class="org">馬偕學校財團法人馬偕醫護管理專科學校</div><div class="title">支出科目分攤表</div><div class="meta"><span>所屬年度月份：${esc(fmtMonth(g.month))}</span><span>總金額新台幣：<b>${total.toLocaleString('zh-TW')}</b></span></div><table class="alloc"><tr><th>編號</th><th>金額</th><th>說明</th><th>附註</th></tr><tr><td>計畫名稱</td><td colspan="3" class="left">${esc(g.project)}</td></tr><tr><td>用途別</td><td colspan="3"></td></tr><tr><td>勞保費</td><td class="right">${labor.toLocaleString('zh-TW')}</td><td>原始憑證</td><td>張黏</td></tr><tr><td>勞退提繳</td><td class="right">${retire.toLocaleString('zh-TW')}</td><td></td><td></td></tr><tr><td>健保費</td><td class="right">${health.toLocaleString('zh-TW')}</td><td></td><td></td></tr></table><p class="attach">附於　　計畫支出憑證簿第　　冊第　　號。</p><p class="sum">合計新台幣　${chineseAmount(total)}</p><table class="sign"><tr><td>填表人</td><td>覆核</td><td>主辦會計人員</td><td>機關長官或授權代簽人</td></tr><tr><td><br><br></td><td></td><td></td><td></td></tr></table><div class="format">（格式三：本表使用 A4 紙張印製）</div></section>`}
-function exportAllocationDoc(){if(!lastRows.length){alert('目前沒有可匯出的查詢結果。');return}let groups=groupRowsByProjectMonth(lastRows),pages=groups.map((g,i)=>buildAllocationPage(g,i,groups.length)).join(''),html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>@page{size:A4;margin:18mm 15mm 16mm}body{font-family:"Microsoft JhengHei","PMingLiU",sans-serif;color:#000;font-size:12pt}.allocation-page{width:180mm;min-height:260mm;margin:0 auto}.page-break{page-break-after:always}.org{text-align:center;font-size:17pt;font-weight:bold;margin:3mm 0}.title{text-align:center;font-size:20pt;font-weight:bold;margin:5mm 0 8mm}.meta{display:flex;justify-content:space-between;margin-bottom:5mm}.alloc{width:100%;border-collapse:collapse;table-layout:fixed}.alloc th,.alloc td{border:1px solid #000;padding:7px 6px;text-align:center;vertical-align:middle;min-height:13mm}.alloc .left{text-align:left;word-break:break-all}.alloc .right{text-align:right}.attach{margin:5mm 0 10mm}.sum{font-size:14pt;font-weight:bold;margin:8mm 0 14mm}.sign{width:100%;border-collapse:collapse;table-layout:fixed}.sign td{border:1px solid #000;text-align:center;height:12mm}.format{text-align:right;margin-top:5mm;font-size:10pt}</style></head><body>${pages}</body></html>`;let blob=new Blob([html],{type:'application/msword;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`支出科目分攤表_${fmtMonth(groups[0].month)}${groups.length>1?'_等':''}.doc`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-
-$('searchBtn').onclick=search;['handler','startMonth','endMonth'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter')search()}));loadData();
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>專案計畫人員保費查詢系統</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:"Microsoft JhengHei","Noto Sans TC",Arial,sans-serif;background:#f3f6fa;color:#243447}
+.header{background:#12385b;color:#fff;padding:24px 20px;text-align:center}.header h1{margin:0;font-size:28px;letter-spacing:1px}
+.wrap{max-width:1200px;margin:28px auto;padding:0 18px}.card{background:#fff;border-radius:12px;box-shadow:0 3px 14px rgba(0,0,0,.08);padding:24px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}.field label{display:block;font-weight:700;margin-bottom:8px}.field input{width:100%;padding:11px 12px;border:1px solid #cbd5df;border-radius:7px;font-size:16px}.hint{margin-top:7px;color:#596b7d;font-size:13px}
+.notice{margin:18px 0 14px;text-align:center;color:#9a5b00;font-size:14px}.actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}.btn{border:0;border-radius:7px;padding:11px 22px;font-size:16px;cursor:pointer}.primary{background:#12385b;color:#fff}.secondary{background:#527a9f;color:#fff}.btn:disabled{opacity:.5;cursor:not-allowed}
+.summary{margin:22px 0 14px;display:flex;flex-wrap:wrap;gap:16px;justify-content:center;font-size:15px}.summary strong{color:#12385b}.table-wrap{overflow:auto}table.result{width:100%;border-collapse:collapse;background:#fff}table.result th,table.result td{border:1px solid #d7dee6;padding:9px 7px;text-align:center;vertical-align:middle}table.result th{background:#e9f0f6;color:#12385b}table.result tr:nth-child(even){background:#fafcfe}.total-row{font-weight:700;background:#eef4f8!important}.empty{text-align:center;padding:35px;color:#687888}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.header h1{font-size:23px}}
+</style>
+</head>
+<body>
+<div class="header"><h1>專案計畫人員保費查詢系統</h1></div>
+<div class="wrap"><div class="card">
+<div class="grid">
+<div class="field"><label for="handler">業務承辦人</label><input id="handler" placeholder="例如：1234" autocomplete="off"><div class="hint">請輸入業務承辦人身分證號後4碼及保險年月查詢</div></div>
+<div class="field"><label for="start">起始保險年月</label><input id="start" type="month"><div class="hint">例如：2026年08月</div></div>
+<div class="field"><label for="end">結束保險年月</label><input id="end" type="month"><div class="hint">例如：2026年08月</div></div>
+</div>
+<div class="notice">當月保險費請於次月月底查詢，例如115年1月保險費於115年2月底可提供查詢。</div>
+<div class="actions"><button class="btn primary" onclick="doQuery()">查詢</button><button class="btn secondary" id="excelBtn" onclick="exportExcel()" disabled>匯出 Excel</button><button class="btn secondary" id="wordBtn" onclick="exportAllocationDocx()" disabled>匯出支出科目分攤表</button></div>
+<div id="summary" class="summary"></div><div id="result" class="table-wrap"><div class="empty">請輸入查詢條件後按「查詢」</div></div>
+</div></div>
+<script>
+let rows=[];let lastResults=[];
+const DATA_FILE='./專案計畫人員保費查詢.xlsx';
+function norm(v){return String(v??'').trim().toLowerCase()}
+function monthValue(v){let s=String(v??'').trim().replace(/[^0-9]/g,'');if(!s)return null;let y,m;if(s.length===5){y=+s.slice(0,3);m=+s.slice(3)}else if(s.length===6&&s.slice(0,3)==='000'){y=+s.slice(0,3);m=+s.slice(3)}else{y=+s.slice(0,3);m=+s.slice(-2)}return m>=1&&m<=12?y*100+m:null}
+function fmtMonth(v){let n=monthValue(v);return n?String(Math.floor(n/100)).padStart(3,'0')+'年'+String(n%100).padStart(2,'0')+'月':''}
+function inputMonthValue(v){if(!v)return null;let [gy,m]=v.split('-').map(Number);return (gy-1911)*100+m}
+function num(v){if(v==null||v==='')return 0;let n=Number(String(v).replace(/,/g,''));return Number.isFinite(n)?n:0}
+function money(n){return Math.round(num(n)).toLocaleString('en-US')}
+function loadData(){return fetch(DATA_FILE+'?v='+Date.now()).then(r=>{if(!r.ok)throw new Error('無法讀取 Excel 資料檔');return r.arrayBuffer()}).then(b=>{let wb=XLSX.read(b,{type:'array'});let ws=wb.Sheets['資料頁'];if(!ws)throw new Error('找不到「資料頁」工作表');rows=XLSX.utils.sheet_to_json(ws,{defval:''});})}
+function doQuery(){
+ const h=norm(document.getElementById('handler').value), s=inputMonthValue(document.getElementById('start').value), e=inputMonthValue(document.getElementById('end').value);
+ if(!h){alert('請輸入業務承辦人身分證號後4碼。');return} if(s&&e&&s>e){alert('起始保險年月不可晚於結束保險年月。');return}
+ loadData().then(()=>{lastResults=rows.filter(r=>norm(r['業務承辦人證號'])===h).filter(r=>{let mv=monthValue(r['保險年月']);return mv!=null&&(!s||mv>=s)&&(!e||mv<=e)});render();}).catch(err=>alert(err.message));
+}
+function render(){
+ document.getElementById('excelBtn').disabled=!lastResults.length;document.getElementById('wordBtn').disabled=!lastResults.length;
+ if(!lastResults.length){document.getElementById('summary').innerHTML='';document.getElementById('result').innerHTML='<div class="empty">查無符合條件的資料。</div>';return}
+ const name=lastResults.find(r=>String(r['業務承辦人姓名']||'').trim())?.['業務承辦人姓名']||'';
+ const lb=lastResults.reduce((a,r)=>a+num(r['勞工保險費']),0),rt=lastResults.reduce((a,r)=>a+num(r['勞工退休金提繳']),0),hi=lastResults.reduce((a,r)=>a+num(r['全民健康保險費']),0);
+ document.getElementById('summary').innerHTML=`業務承辦人：<strong>${esc(name)}</strong>　資料筆數：<strong>${lastResults.length}</strong>　勞保費：<strong>${money(lb)}</strong>　勞退提繳：<strong>${money(rt)}</strong>　健保費：<strong>${money(hi)}</strong>　合計：<strong>${money(lb+rt+hi)}</strong>`;
+ let html='<table class="result"><thead><tr><th>序號</th><th>單位</th><th>姓名</th><th>保險年月</th><th>投保薪額</th><th>勞工保險費</th><th>勞工退休金提繳</th><th>全民健康保險費</th><th>異動</th><th>備註</th><th>計畫名稱</th></tr></thead><tbody>';
+ lastResults.forEach((r,i)=>{html+=`<tr><td>${i+1}</td><td>${esc(r['單位'])}</td><td>${esc(r['姓名'])}</td><td>${fmtMonth(r['保險年月'])}</td><td>${money(r['投保薪額'])}</td><td>${money(r['勞工保險費'])}</td><td>${money(r['勞工退休金提繳'])}</td><td>${money(r['全民健康保險費'])}</td><td>${esc(r['異動'])}</td><td>${esc(r['備註'])}</td><td>${esc(r['計畫名稱'])}</td></tr>`});
+ html+=`</tbody></table>`;document.getElementById('result').innerHTML=html;
+}
+function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+function exportExcel(){if(!lastResults.length)return;let out=lastResults.map((r,i)=>{let x={...r};x['序號']=i+1;return x});let ws=XLSX.utils.json_to_sheet(out);let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'查詢結果');XLSX.writeFile(wb,'專案計畫人員保費查詢結果.xlsx')}
+function chineseMoney(n){
+ n=Math.round(num(n));if(n===0)return'零元整';const d=['零','壹','貳','參','肆','伍','陸','柒','捌','玖'];const units=['','拾','佰','仟'];
+ function section(x){let s='',zero=false;for(let i=0;i<4;i++){let q=x%10;x=Math.floor(x/10);if(q){s=d[q]+units[i]+s;zero=false}else if(s&&!zero){s='零'+s;zero=true}}return s.replace(/^零/,'').replace(/零+/g,'零').replace(/零$/,'')}
+ let yi=Math.floor(n/100000000),wan=Math.floor((n%100000000)/10000),yuan=n%10000,s='';if(yi)s+=section(yi)+'億';if(wan)s+=(yi&&wan<1000?'零':'')+section(wan)+'萬';if(yuan)s+=((yi||wan)&&yuan<1000?'零':'')+section(yuan);return s+'元整';
+}
+async function exportAllocationDocx(){
+ if(!lastResults.length)return;
+ try{
+  const groups=new Map();lastResults.forEach(r=>{const key=fmtMonth(r['保險年月'])+'||'+String(r['計畫名稱']??'').trim();if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r)});
+  const resp=await fetch('./支出科目分攤表範本.docx?'+Date.now());if(!resp.ok)throw new Error('無法讀取支出科目分攤表範本。');
+  const zip=await JSZip.loadAsync(await resp.arrayBuffer());const xml=await zip.file('word/document.xml').async('string');
+  const parser=new DOMParser(),doc=parser.parseFromString(xml,'application/xml'),body=doc.getElementsByTagName('w:body')[0],sect=body.lastElementChild;
+  const base=Array.from(body.childNodes).filter(n=>n!==sect).map(n=>n.cloneNode(true));
+  while(body.firstChild)body.removeChild(body.firstChild);
+  const groupsArr=Array.from(groups.values());
+  groupsArr.forEach((g,idx)=>{const month=fmtMonth(g[0]['保險年月']),project=String(g[0]['計畫名稱']??'').trim();let lb=g.reduce((a,r)=>a+num(r['勞工保險費']),0),rt=g.reduce((a,r)=>a+num(r['勞工退休金提繳']),0),hi=g.reduce((a,r)=>a+num(r['全民健康保險費']),0),total=lb+rt+hi;
+    const clones=base.map(n=>n.cloneNode(true));replaceTemplate(clones,month,total,project,lb,rt,hi);clones.forEach(n=>body.appendChild(n));
+    if(idx<groupsArr.length-1){const p=doc.createElement('w:p'),r=doc.createElement('w:r'),br=doc.createElement('w:br');br.setAttribute('w:type','page');r.appendChild(br);p.appendChild(r);body.appendChild(p)}
+  });body.appendChild(sect.cloneNode(true));
+  const out=new XMLSerializer().serializeToString(doc);zip.file('word/document.xml',out);const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});downloadBlob(blob,'支出科目分攤表.docx');
+ }catch(e){console.error(e);alert('匯出支出科目分攤表失敗：'+e.message)}
+}
+function replaceTemplate(nodes,month,total,project,lb,rt,hi){
+ const WNS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+ const all=[];nodes.forEach(n=>{if(n.nodeType===1){if(n.localName==='r'&&n.namespaceURI===WNS)all.push(n);Array.from(n.getElementsByTagNameNS(WNS,'r')).forEach(r=>{if(!all.includes(r))all.push(r)});}});
+ const redRuns=all.filter(r=>{const rp=Array.from(r.getElementsByTagNameNS(WNS,'rPr'))[0];if(!rp)return false;const c=Array.from(rp.getElementsByTagNameNS(WNS,'color'))[0];return c&&c.getAttribute('w:val')==='FF0000'});
+ // 依範本中紅色文字出現順序：年月、總額、計畫名稱×3、科目×3、金額×3、中文大寫合計
+ const vals=[month.slice(0,3), '年',month.slice(4,6),'月',money(total),project,project,project,'勞保費',money(lb),'勞退提繳',money(rt),'健保費',money(hi),chineseMoney(total)];
+ let vi=0;redRuns.forEach(run=>{const t=run.querySelector('w\\:t');if(t&&vi<vals.length){t.textContent=vals[vi++];}});
+}
+function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
 </script></body></html>
