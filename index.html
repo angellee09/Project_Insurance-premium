@@ -79,11 +79,35 @@ async function exportAllocationDocx(){
 }
 function replaceTemplate(nodes,month,total,project,lb,rt,hi){
  const WNS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
- const all=[];nodes.forEach(n=>{if(n.nodeType===1){if(n.localName==='r'&&n.namespaceURI===WNS)all.push(n);Array.from(n.getElementsByTagNameNS(WNS,'r')).forEach(r=>{if(!all.includes(r))all.push(r)});}});
- const redRuns=all.filter(r=>{const rp=Array.from(r.getElementsByTagNameNS(WNS,'rPr'))[0];if(!rp)return false;const c=Array.from(rp.getElementsByTagNameNS(WNS,'color'))[0];return c&&c.getAttribute('w:val')==='FF0000'});
- // 依範本中紅色文字出現順序：年月、總額、計畫名稱×3、科目×3、金額×3、中文大寫合計
- const vals=[month.slice(0,3), '年',month.slice(4,6),'月',money(total),project,project,project,'勞保費',money(lb),'勞退提繳',money(rt),'健保費',money(hi),chineseMoney(total)];
- let vi=0;redRuns.forEach(run=>{const t=run.querySelector('w\\:t');if(t&&vi<vals.length){t.textContent=vals[vi++];}});
+ const all=[];
+ function collect(n){
+   if(n.nodeType!==1)return;
+   if(n.namespaceURI===WNS && n.localName==='r') all.push(n);
+   Array.from(n.childNodes||[]).forEach(collect);
+ }
+ nodes.forEach(collect);
+ const redRuns=all.filter(run=>{
+   const rp=Array.from(run.getElementsByTagNameNS(WNS,'rPr'))[0];
+   if(!rp)return false;
+   const c=Array.from(rp.getElementsByTagNameNS(WNS,'color'))[0];
+   return c && String(c.getAttribute('w:val')||'').toUpperCase()==='FF0000';
+ });
+ // 範本紅字的實際結構：
+ // 00 年 00 月／00,000／計畫名稱(分成多個紅字 run)／勞保費 金額／勞退提繳 金額／健保費 金額／中文大寫合計
+ const y=month.slice(0,3), m=month.slice(4,6);
+ const vals=[y,'年',m,'月',money(total)];
+ // 計畫名稱在範本中被拆成多個紅色 run，先放入第一個 run，其餘清空
+ vals.push(project,'','','','');
+ vals.push('勞保費','　',money(lb),'勞退提繳','　',money(rt),'健保費','　',money(hi),chineseMoney(total));
+ let vi=0;
+ redRuns.forEach(run=>{
+   const ts=Array.from(run.getElementsByTagNameNS(WNS,'t'));
+   if(!ts.length || vi>=vals.length)return;
+   // 一個紅字 run 通常只有一個 w:t；若有多個，僅修改第一個並清空其餘。
+   ts[0].textContent=vals[vi++];
+   for(let i=1;i<ts.length;i++) ts[i].textContent='';
+ });
 }
+
 function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
 </script></body></html>
