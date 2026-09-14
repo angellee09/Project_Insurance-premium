@@ -12,7 +12,7 @@
 .wrap{max-width:1200px;margin:28px auto;padding:0 18px}.card{background:#fff;border-radius:12px;box-shadow:0 3px 14px rgba(0,0,0,.08);padding:24px}
 .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}.field label{display:block;font-weight:700;margin-bottom:8px}.field input{width:100%;padding:11px 12px;border:1px solid #cbd5df;border-radius:7px;font-size:16px}.hint{margin-top:7px;color:#596b7d;font-size:13px}
 .notice{margin:18px 0 14px;text-align:center;color:#9a5b00;font-size:14px}.actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}.btn{border:0;border-radius:7px;padding:11px 22px;font-size:16px;cursor:pointer}.primary{background:#12385b;color:#fff}.secondary{background:#527a9f;color:#fff}.btn:disabled{opacity:.5;cursor:not-allowed}
-.summary{margin:22px 0 14px;display:flex;flex-wrap:wrap;gap:16px;justify-content:center;font-size:15px}.summary strong{color:#12385b}.table-wrap{overflow:auto}table.result{width:100%;border-collapse:collapse;background:#fff}table.result th,table.result td{border:1px solid #d7dee6;padding:9px 7px;text-align:center;vertical-align:middle}table.result th{background:#e9f0f6;color:#12385b}table.result tr:nth-child(even){background:#fafcfe}.total-row{font-weight:700;background:#eef4f8!important}.empty{text-align:center;padding:35px;color:#687888}
+.summary{margin:22px 0 14px;display:flex;flex-wrap:wrap;gap:16px;justify-content:center;font-size:15px}.summary strong{color:#12385b}.table-wrap{overflow:auto}table.result{width:100%;border-collapse:collapse;background:#fff}table.result th,table.result td{border:1px solid #d7dee6;padding:9px 7px;text-align:center;vertical-align:middle}.no-wrap{white-space:nowrap}table.result th{background:#e9f0f6;color:#12385b}table.result tr:nth-child(even){background:#fafcfe}.total-row{font-weight:700;background:#eef4f8!important}.empty{text-align:center;padding:35px;color:#687888}
 @media(max-width:800px){.grid{grid-template-columns:1fr}.header h1{font-size:23px}}
 </style>
 </head>
@@ -25,7 +25,7 @@
 <div class="field"><label for="end">結束保險年月</label><input id="end" type="month"><div class="hint">例如：2026年08月</div></div>
 </div>
 <div class="notice">當月保險費請於次月月底查詢，例如115年1月保險費於115年2月底可提供查詢。</div>
-<div class="actions"><button class="btn primary" onclick="doQuery()">查詢</button><button class="btn secondary" id="excelBtn" onclick="exportExcel()" disabled>匯出 Excel</button><button class="btn secondary" id="wordBtn" onclick="exportAllocationDocx()" disabled>匯出支出科目分攤表</button></div>
+<div class="actions"><button class="btn primary" onclick="doQuery()">查詢</button><button class="btn secondary" id="excelBtn" onclick="exportExcel()" disabled>匯出 Excel</button><button class="btn secondary" id="wordBtn" onclick="exportAllocationDocx()" disabled>匯出支出科目分攤表</button><button class="btn secondary" onclick="openBudgetPdf()">薪級及保險費預算表</button></div>
 <div id="summary" class="summary"></div><div id="result" class="table-wrap"><div class="empty">請輸入查詢條件後按「查詢」</div></div>
 </div></div>
 <script>
@@ -50,7 +50,7 @@ function render(){
  const lb=lastResults.reduce((a,r)=>a+num(r['勞工保險費']),0),rt=lastResults.reduce((a,r)=>a+num(r['勞工退休金提繳']),0),hi=lastResults.reduce((a,r)=>a+num(r['全民健康保險費']),0);
  document.getElementById('summary').innerHTML=`業務承辦人：<strong>${esc(name)}</strong>　資料筆數：<strong>${lastResults.length}</strong>　勞保費：<strong>${money(lb)}</strong>　勞退提繳：<strong>${money(rt)}</strong>　健保費：<strong>${money(hi)}</strong>　合計：<strong>${money(lb+rt+hi)}</strong>`;
  let html='<table class="result"><thead><tr><th>序號</th><th>單位</th><th>姓名</th><th>保險年月</th><th>投保薪額</th><th>勞工保險費</th><th>勞工退休金提繳</th><th>全民健康保險費</th><th>異動</th><th>備註</th><th>計畫名稱</th></tr></thead><tbody>';
- lastResults.forEach((r,i)=>{html+=`<tr><td>${i+1}</td><td>${esc(r['單位'])}</td><td>${esc(r['姓名'])}</td><td>${fmtMonth(r['保險年月'])}</td><td>${money(r['投保薪額'])}</td><td>${money(r['勞工保險費'])}</td><td>${money(r['勞工退休金提繳'])}</td><td>${money(r['全民健康保險費'])}</td><td>${esc(r['異動'])}</td><td>${esc(r['備註'])}</td><td>${esc(r['計畫名稱'])}</td></tr>`});
+ lastResults.forEach((r,i)=>{html+=`<tr><td>${i+1}</td><td>${esc(r['單位'])}</td><td class="no-wrap">${esc(r['姓名'])}</td><td class="no-wrap">${fmtMonth(r['保險年月'])}</td><td class="no-wrap">${money(r['投保薪額'])}</td><td class="no-wrap">${money(r['勞工保險費'])}</td><td class="no-wrap">${money(r['勞工退休金提繳'])}</td><td class="no-wrap">${money(r['全民健康保險費'])}</td><td>${esc(r['異動'])}</td><td>${esc(r['備註'])}</td><td>${esc(r['計畫名稱'])}</td></tr>`});
  html+=`</tbody></table>`;document.getElementById('result').innerHTML=html;
 }
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
@@ -72,7 +72,7 @@ async function exportAllocationDocx(){
   const groupsArr=Array.from(groups.values());
   groupsArr.forEach((g,idx)=>{const month=fmtMonth(g[0]['保險年月']),project=String(g[0]['計畫名稱']??'').trim();let lb=g.reduce((a,r)=>a+num(r['勞工保險費']),0),rt=g.reduce((a,r)=>a+num(r['勞工退休金提繳']),0),hi=g.reduce((a,r)=>a+num(r['全民健康保險費']),0),total=lb+rt+hi;
     const clones=base.map(n=>n.cloneNode(true));replaceTemplate(clones,month,total,project,lb,rt,hi);clones.forEach(n=>body.appendChild(n));
-    if(idx<groupsArr.length-1){const p=doc.createElement('w:p'),r=doc.createElement('w:r'),br=doc.createElement('w:br');br.setAttribute('w:type','page');r.appendChild(br);p.appendChild(r);body.appendChild(p)}
+    if(idx<groupsArr.length-1){const WNS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';const p=doc.createElementNS(WNS,'w:p'),r=doc.createElementNS(WNS,'w:r'),br=doc.createElementNS(WNS,'w:br');br.setAttribute('w:type','page');r.appendChild(br);p.appendChild(r);body.appendChild(p)}
   });body.appendChild(sect.cloneNode(true));
   const out=new XMLSerializer().serializeToString(doc);zip.file('word/document.xml',out);const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});downloadBlob(blob,'支出科目分攤表.docx');
  }catch(e){console.error(e);alert('匯出支出科目分攤表失敗：'+e.message)}
@@ -95,10 +95,14 @@ function replaceTemplate(nodes,month,total,project,lb,rt,hi){
  // 範本紅字的實際結構：
  // 00 年 00 月／00,000／計畫名稱(分成多個紅字 run)／勞保費 金額／勞退提繳 金額／健保費 金額／中文大寫合計
  const y=month.slice(0,3), m=month.slice(4,6);
- const vals=[y,'年',m,'月',money(total)];
- // 計畫名稱在範本中被拆成多個紅色 run，先放入第一個 run，其餘清空
- vals.push(project,'','','','');
- vals.push('勞保費','　',money(lb),'勞退提繳','　',money(rt),'健保費','　',money(hi),chineseMoney(total));
+ const vals=[
+   y,'年',m,'月',money(total),
+   project,'','','','',
+   '勞保費','　',money(lb),'',
+   '勞退提繳','　',money(rt),'',
+   '健保費','　',money(hi),
+   chineseMoney(total)
+ ];
  let vi=0;
  redRuns.forEach(run=>{
    const ts=Array.from(run.getElementsByTagNameNS(WNS,'t'));
@@ -107,6 +111,11 @@ function replaceTemplate(nodes,month,total,project,lb,rt,hi){
    ts[0].textContent=vals[vi++];
    for(let i=1;i<ts.length;i++) ts[i].textContent='';
  });
+}
+
+function openBudgetPdf(){
+ const w=window.open('./薪級及保險費預算表.pdf','_blank');
+ if(!w) alert('瀏覽器封鎖了新視窗，請允許本網站開啟新視窗後再試。');
 }
 
 function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
