@@ -32,6 +32,7 @@
 let rows=[];let lastResults=[];
 const DATA_FILE='./專案計畫人員保費查詢.xlsx';
 function norm(v){return String(v??'').trim().toLowerCase()}
+function handlerTokens(v){return String(v??'').split(/[\s,，、;；]+/).map(norm).filter(Boolean)}
 function monthValue(v){let s=String(v??'').trim().replace(/[^0-9]/g,'');if(!s)return null;let y,m;if(s.length===5){y=+s.slice(0,3);m=+s.slice(3)}else if(s.length===6&&s.slice(0,3)==='000'){y=+s.slice(0,3);m=+s.slice(3)}else{y=+s.slice(0,3);m=+s.slice(-2)}return m>=1&&m<=12?y*100+m:null}
 function fmtMonth(v){let n=monthValue(v);return n?String(Math.floor(n/100)).padStart(3,'0')+'年'+String(n%100).padStart(2,'0')+'月':''}
 function inputMonthValue(v){if(!v)return null;let [gy,m]=v.split('-').map(Number);return (gy-1911)*100+m}
@@ -41,7 +42,7 @@ function loadData(){return fetch(DATA_FILE+'?v='+Date.now()).then(r=>{if(!r.ok)t
 function doQuery(){
  const rawH=document.getElementById('handler').value; const hs=rawH.split(/[\s,，、;；]+/).map(norm).filter(Boolean), s=inputMonthValue(document.getElementById('start').value), e=inputMonthValue(document.getElementById('end').value);
  if(!hs.length){alert('請輸入業務承辦人身分證號後4碼。');return} if(s&&e&&s>e){alert('起始保險年月不可晚於結束保險年月。');return}
- loadData().then(()=>{lastResults=rows.filter(r=>hs.includes(norm(r['業務承辦人證號']))).filter(r=>{let mv=monthValue(r['保險年月']);return mv!=null&&(!s||mv>=s)&&(!e||mv<=e)});render();}).catch(err=>alert(err.message));
+ loadData().then(()=>{lastResults=rows.filter(r=>handlerTokens(r['業務承辦人證號']).some(code=>hs.includes(code))).filter(r=>{let mv=monthValue(r['保險年月']);return mv!=null&&(!s||mv>=s)&&(!e||mv<=e)});render();}).catch(err=>alert(err.message));
 }
 function render(){
  document.getElementById('excelBtn').disabled=!lastResults.length;document.getElementById('wordBtn').disabled=!lastResults.length;
@@ -118,23 +119,11 @@ function replaceTemplate(nodes,doc,month,total,project,lb,rt,hi,g){
  // 1. 表頭：所屬年度月份
  const r3=cells(rows[3]);
  // 本範本第4列實際 XML 結構為：月份標籤、月份資料格、總金額標籤、總金額資料格。
- if(r3[0]){
-   const ps=q(r3[0],'p');
-   if(ps[0]){
-     // 原範本為「所屬年度月份：」+空白，將資料寫入同一段落末端。
-     const labelText='所屬年度月份：';
-     const ts=q(ps[0],'t');
-     if(ts.length){
-       const labelRun=q(ps[0],'r')[0];
-       if(labelRun && text(labelRun).includes(labelText)){
-         const nr=doc.createElementNS(WNS,'w:r');
-         const baseRp=first(labelRun,'rPr');
-         if(baseRp) nr.appendChild(baseRp.cloneNode(true));
-         const rp=first(nr,'rPr') || nr.appendChild(doc.createElementNS(WNS,'w:rPr'));
-         const c=first(rp,'color') || rp.appendChild(doc.createElementNS(WNS,'w:color')); c.setAttribute('w:val','FF0000');
-         const nt=doc.createElementNS(WNS,'w:t');nt.textContent=y+'年'+m+'月';nr.appendChild(nt);ps[0].appendChild(nr);
-       }
-     }
+ // 「所屬年度月份：」保留在左側標籤格，月份資料寫入右側獨立儲存格。
+ if(r3[1]){
+   const targetPs=q(r3[1],'p');
+   if(targetPs[0]){
+     setParagraphText(targetPs[0], y+'年'+m+'月', true);
    }
  }
  // 2. 表頭：總金額
