@@ -29,7 +29,7 @@
 <div id="summary" class="summary"></div><div id="result" class="table-wrap"><div class="empty">請輸入查詢條件後按「查詢」</div></div>
 </div></div>
 <script>
-let rows=[];let lastResults=[];
+let rows=[];let lastResults=[];let lastHandlerCodes=[];
 const DATA_FILE='./專案計畫人員保費查詢.xlsx';
 function norm(v){return String(v??'').trim().toLowerCase()}
 function handlerTokens(v){return String(v??'').split(/[\s,，、;；]+/).map(norm).filter(Boolean)}
@@ -42,12 +42,12 @@ function loadData(){return fetch(DATA_FILE+'?v='+Date.now()).then(r=>{if(!r.ok)t
 function doQuery(){
  const rawH=document.getElementById('handler').value; const hs=rawH.split(/[\s,，、;；]+/).map(norm).filter(Boolean), s=inputMonthValue(document.getElementById('start').value), e=inputMonthValue(document.getElementById('end').value);
  if(!hs.length){alert('請輸入業務承辦人身分證號後4碼。');return} if(s&&e&&s>e){alert('起始保險年月不可晚於結束保險年月。');return}
- loadData().then(()=>{lastResults=rows.filter(r=>handlerTokens(r['業務承辦人證號']).some(code=>hs.includes(code))).filter(r=>{let mv=monthValue(r['保險年月']);return mv!=null&&(!s||mv>=s)&&(!e||mv<=e)});render();}).catch(err=>alert(err.message));
+ loadData().then(()=>{lastHandlerCodes=hs;lastResults=rows.filter(r=>handlerTokens(r['業務承辦人證號']).some(code=>hs.includes(code))).filter(r=>{let mv=monthValue(r['保險年月']);return mv!=null&&(!s||mv>=s)&&(!e||mv<=e)});render();}).catch(err=>alert(err.message));
 }
 function render(){
  document.getElementById('excelBtn').disabled=!lastResults.length;document.getElementById('wordBtn').disabled=!lastResults.length;
  if(!lastResults.length){document.getElementById('summary').innerHTML='';document.getElementById('result').innerHTML='<div class="empty">查無符合條件的資料。</div>';return}
- const names=[...new Set(lastResults.map(r=>String(r['業務承辦人姓名']||'').trim()).filter(Boolean))].join('、'); const name=names;
+ const names=[]; lastResults.forEach(r=>handlerTokens(r['業務承辦人證號']).forEach((code,i)=>{if(lastHandlerCodes.includes(code)){const ns=handlerTokens(r['業務承辦人姓名']); const nm=String(ns[i]??'').trim(); if(nm&&!names.includes(nm)) names.push(nm)}})); const name=names.join('、');
  const lb=lastResults.reduce((a,r)=>a+num(r['勞工保險費']),0),rt=lastResults.reduce((a,r)=>a+num(r['勞工退休金提繳']),0),hi=lastResults.reduce((a,r)=>a+num(r['全民健康保險費']),0);
  document.getElementById('summary').innerHTML=`業務承辦人：<strong>${esc(name)}</strong>　資料筆數：<strong>${lastResults.length}</strong>　勞保費：<strong>${money(lb)}</strong>　勞退提繳：<strong>${money(rt)}</strong>　健保費：<strong>${money(hi)}</strong>　合計：<strong>${money(lb+rt+hi)}</strong>`;
  let html='<table class="result"><thead><tr><th>序號</th><th>單位</th><th>姓名</th><th>保險年月</th><th>投保薪額</th><th>勞工保險費</th><th>勞工退休金提繳</th><th>全民健康保險費</th><th>異動</th><th>備註</th><th>計畫名稱</th></tr></thead><tbody>';
@@ -55,7 +55,7 @@ function render(){
  html+=`</tbody></table>`;document.getElementById('result').innerHTML=html;
 }
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-function exportExcel(){if(!lastResults.length)return;let out=lastResults.map((r,i)=>{let x={...r};x['序號']=i+1;return x});let ws=XLSX.utils.json_to_sheet(out);let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'查詢結果');XLSX.writeFile(wb,'專案計畫人員保費查詢結果.xlsx')}
+function exportExcel(){if(!lastResults.length)return;let out=lastResults.map((r,i)=>{let x={...r};x['序號']=i+1;const codes=handlerTokens(r['業務承辦人證號']), names=handlerTokens(r['業務承辦人姓名']);const selectedNames=[];codes.forEach((code,idx)=>{if(lastHandlerCodes.includes(code)){const nm=String(names[idx]??'').trim();if(nm&&!selectedNames.includes(nm))selectedNames.push(nm)}});x['業務承辦人證號']=lastHandlerCodes.join(',');x['業務承辦人姓名']=selectedNames.join('、');return x});let ws=XLSX.utils.json_to_sheet(out);let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'查詢結果');XLSX.writeFile(wb,'專案計畫人員保費查詢結果.xlsx')}
 function chineseMoney(n){
  n=Math.round(num(n));if(n===0)return'零元整';const d=['零','壹','貳','參','肆','伍','陸','柒','捌','玖'];const units=['','拾','佰','仟'];
  function section(x){let s='',zero=false;for(let i=0;i<4;i++){let q=x%10;x=Math.floor(x/10);if(q){s=d[q]+units[i]+s;zero=false}else if(s&&!zero){s='零'+s;zero=true}}return s.replace(/^零/,'').replace(/零+/g,'零').replace(/零$/,'')}
