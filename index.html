@@ -39,14 +39,14 @@ function num(v){if(v==null||v==='')return 0;let n=Number(String(v).replace(/,/g,
 function money(n){return Math.round(num(n)).toLocaleString('en-US')}
 function loadData(){return fetch(DATA_FILE+'?v='+Date.now()).then(r=>{if(!r.ok)throw new Error('無法讀取 Excel 資料檔');return r.arrayBuffer()}).then(b=>{let wb=XLSX.read(b,{type:'array'});let ws=wb.Sheets['資料頁'];if(!ws)throw new Error('找不到「資料頁」工作表');rows=XLSX.utils.sheet_to_json(ws,{defval:''});})}
 function doQuery(){
- const h=norm(document.getElementById('handler').value), s=inputMonthValue(document.getElementById('start').value), e=inputMonthValue(document.getElementById('end').value);
- if(!h){alert('請輸入業務承辦人身分證號後4碼。');return} if(s&&e&&s>e){alert('起始保險年月不可晚於結束保險年月。');return}
- loadData().then(()=>{lastResults=rows.filter(r=>norm(r['業務承辦人證號'])===h).filter(r=>{let mv=monthValue(r['保險年月']);return mv!=null&&(!s||mv>=s)&&(!e||mv<=e)});render();}).catch(err=>alert(err.message));
+ const rawH=document.getElementById('handler').value; const hs=rawH.split(/[\s,，、;；]+/).map(norm).filter(Boolean), s=inputMonthValue(document.getElementById('start').value), e=inputMonthValue(document.getElementById('end').value);
+ if(!hs.length){alert('請輸入業務承辦人身分證號後4碼。');return} if(s&&e&&s>e){alert('起始保險年月不可晚於結束保險年月。');return}
+ loadData().then(()=>{lastResults=rows.filter(r=>hs.includes(norm(r['業務承辦人證號']))).filter(r=>{let mv=monthValue(r['保險年月']);return mv!=null&&(!s||mv>=s)&&(!e||mv<=e)});render();}).catch(err=>alert(err.message));
 }
 function render(){
  document.getElementById('excelBtn').disabled=!lastResults.length;document.getElementById('wordBtn').disabled=!lastResults.length;
  if(!lastResults.length){document.getElementById('summary').innerHTML='';document.getElementById('result').innerHTML='<div class="empty">查無符合條件的資料。</div>';return}
- const name=lastResults.find(r=>String(r['業務承辦人姓名']||'').trim())?.['業務承辦人姓名']||'';
+ const names=[...new Set(lastResults.map(r=>String(r['業務承辦人姓名']||'').trim()).filter(Boolean))].join('、'); const name=names;
  const lb=lastResults.reduce((a,r)=>a+num(r['勞工保險費']),0),rt=lastResults.reduce((a,r)=>a+num(r['勞工退休金提繳']),0),hi=lastResults.reduce((a,r)=>a+num(r['全民健康保險費']),0);
  document.getElementById('summary').innerHTML=`業務承辦人：<strong>${esc(name)}</strong>　資料筆數：<strong>${lastResults.length}</strong>　勞保費：<strong>${money(lb)}</strong>　勞退提繳：<strong>${money(rt)}</strong>　健保費：<strong>${money(hi)}</strong>　合計：<strong>${money(lb+rt+hi)}</strong>`;
  let html='<table class="result"><thead><tr><th>序號</th><th>單位</th><th>姓名</th><th>保險年月</th><th>投保薪額</th><th>勞工保險費</th><th>勞工退休金提繳</th><th>全民健康保險費</th><th>異動</th><th>備註</th><th>計畫名稱</th></tr></thead><tbody>';
@@ -71,13 +71,13 @@ async function exportAllocationDocx(){
   while(body.firstChild)body.removeChild(body.firstChild);
   const groupsArr=Array.from(groups.values());
   groupsArr.forEach((g,idx)=>{const month=fmtMonth(g[0]['保險年月']),project=String(g[0]['計畫名稱']??'').trim();let lb=g.reduce((a,r)=>a+num(r['勞工保險費']),0),rt=g.reduce((a,r)=>a+num(r['勞工退休金提繳']),0),hi=g.reduce((a,r)=>a+num(r['全民健康保險費']),0),total=lb+rt+hi;
-    const clones=base.map(n=>n.cloneNode(true));replaceTemplate(clones,month,total,project,lb,rt,hi);clones.forEach(n=>body.appendChild(n));
+    const clones=base.map(n=>n.cloneNode(true));replaceTemplate(clones,doc,month,total,project,lb,rt,hi,g);clones.forEach(n=>body.appendChild(n));
     if(idx<groupsArr.length-1){const WNS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';const p=doc.createElementNS(WNS,'w:p'),r=doc.createElementNS(WNS,'w:r'),br=doc.createElementNS(WNS,'w:br');br.setAttribute('w:type','page');r.appendChild(br);p.appendChild(r);body.appendChild(p)}
   });body.appendChild(sect.cloneNode(true));
   const out=new XMLSerializer().serializeToString(doc);zip.file('word/document.xml',out);const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});downloadBlob(blob,'支出科目分攤表.docx');
  }catch(e){console.error(e);alert('匯出支出科目分攤表失敗：'+e.message)}
 }
-function replaceTemplate(nodes,month,total,project,lb,rt,hi){
+function replaceTemplate(nodes,doc,month,total,project,lb,rt,hi,g){
  const WNS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
  const q=(n,tag)=>Array.from(n.getElementsByTagNameNS(WNS,tag));
  const first=(n,tag)=>q(n,tag)[0];
@@ -198,8 +198,8 @@ function replaceTemplate(nodes,month,total,project,lb,rt,hi){
      const ps=q(cs[3],'p'); if(ps[0]) setParagraphText(ps[0],item[1]);
    }
    // 說明欄：每位被保險人一行，格式為「姓名＋該項保險費」，例如：嚴麟4072。
-   if(cs[6]){
-     const ps=q(cs[6],'p'); if(ps[0]) setParagraphLines(ps[0],item[2]);
+   if(cs[4]){
+     const ps=q(cs[4],'p'); if(ps[0]) setParagraphLines(ps[0],item[2]);
    }
  });
  // 計畫名稱只填第一列，因為第1列至第3列在 Word 範本中為同一個垂直合併區。
