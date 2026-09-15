@@ -32,6 +32,7 @@
 let rows=[];let lastResults=[];
 const DATA_FILE='./專案計畫人員保費查詢.xlsx';
 function norm(v){return String(v??'').trim().toLowerCase()}
+function handlerCodes(v){return String(v??'').split(/[,，;；\/\s]+/).map(x=>norm(x)).filter(Boolean)}
 function monthValue(v){let s=String(v??'').trim().replace(/[^0-9]/g,'');if(!s)return null;let y,m;if(s.length===5){y=+s.slice(0,3);m=+s.slice(3)}else if(s.length===6&&s.slice(0,3)==='000'){y=+s.slice(0,3);m=+s.slice(3)}else{y=+s.slice(0,3);m=+s.slice(-2)}return m>=1&&m<=12?y*100+m:null}
 function fmtMonth(v){let n=monthValue(v);return n?String(Math.floor(n/100)).padStart(3,'0')+'年'+String(n%100).padStart(2,'0')+'月':''}
 function inputMonthValue(v){if(!v)return null;let [gy,m]=v.split('-').map(Number);return (gy-1911)*100+m}
@@ -41,7 +42,7 @@ function loadData(){return fetch(DATA_FILE+'?v='+Date.now()).then(r=>{if(!r.ok)t
 function doQuery(){
  const h=norm(document.getElementById('handler').value), s=inputMonthValue(document.getElementById('start').value), e=inputMonthValue(document.getElementById('end').value);
  if(!h){alert('請輸入業務承辦人身分證號後4碼。');return} if(s&&e&&s>e){alert('起始保險年月不可晚於結束保險年月。');return}
- loadData().then(()=>{lastResults=rows.filter(r=>norm(r['業務承辦人證號'])===h).filter(r=>{let mv=monthValue(r['保險年月']);return mv!=null&&(!s||mv>=s)&&(!e||mv<=e)});render();}).catch(err=>alert(err.message));
+ loadData().then(()=>{lastResults=rows.filter(r=>handlerCodes(r['業務承辦人證號']).includes(h)).filter(r=>{let mv=monthValue(r['保險年月']);return mv!=null&&(!s||mv>=s)&&(!e||mv<=e)});render();}).catch(err=>alert(err.message));
 }
 function render(){
  document.getElementById('excelBtn').disabled=!lastResults.length;document.getElementById('wordBtn').disabled=!lastResults.length;
