@@ -83,6 +83,31 @@ function replaceTemplate(nodes,doc,month,total,project,lb,rt,hi,g){
  const q=(n,tag)=>Array.from(n.getElementsByTagNameNS(WNS,tag));
  const first=(n,tag)=>q(n,tag)[0];
  const text=(n)=>q(n,'t').map(x=>x.textContent||'').join('');
+ const applyImportedStyle=(run)=>{
+   let rp=first(run,'rPr');
+   if(!rp){rp=doc.createElementNS(WNS,'w:rPr');run.insertBefore(rp,run.firstChild)}
+   let rFonts=first(rp,'rFonts');
+   if(!rFonts){rFonts=doc.createElementNS(WNS,'w:rFonts');rp.insertBefore(rFonts,rp.firstChild)}
+   rFonts.setAttribute('w:ascii','DFKai-SB');
+   rFonts.setAttribute('w:hAnsi','DFKai-SB');
+   rFonts.setAttribute('w:eastAsia','標楷體');
+   rFonts.setAttribute('w:cs','DFKai-SB');
+   let sz=first(rp,'sz');
+   if(!sz){sz=doc.createElementNS(WNS,'w:sz');rp.appendChild(sz)}
+   sz.setAttribute('w:val','24');
+   let szCs=first(rp,'szCs');
+   if(!szCs){szCs=doc.createElementNS(WNS,'w:szCs');rp.appendChild(szCs)}
+   szCs.setAttribute('w:val','24');
+   let b=first(rp,'b');
+   if(!b){b=doc.createElementNS(WNS,'w:b');rp.appendChild(b)}
+   b.setAttribute('w:val','1');
+   let bCs=first(rp,'bCs');
+   if(!bCs){bCs=doc.createElementNS(WNS,'w:bCs');rp.appendChild(bCs)}
+   bCs.setAttribute('w:val','1');
+   let c=first(rp,'color');
+   if(!c){c=doc.createElementNS(WNS,'w:color');rp.appendChild(c)}
+   c.setAttribute('w:val','17365D');
+ };
  const setParagraphText=(p,value,colorRed=false)=>{
    // 只清除該資料段落內原有文字；不動表格框線、列高、對齊等格式。
    q(p,'t').forEach(t=>t.textContent='');
@@ -96,13 +121,7 @@ function replaceTemplate(nodes,doc,month,total,project,lb,rt,hi,g){
    if(!t){t=doc.createElementNS(WNS,'w:t');r.appendChild(t)}
    if(/^\s|\s$/.test(String(value))) t.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');
    t.textContent=String(value??'');
-   if(colorRed){
-     let rp=first(r,'rPr');
-     if(!rp){rp=doc.createElementNS(WNS,'w:rPr');r.insertBefore(rp,r.firstChild)}
-     let c=first(rp,'color');
-     if(!c){c=doc.createElementNS(WNS,'w:color');rp.appendChild(c)}
-     c.setAttribute('w:val','FF0000');
-   }
+   applyImportedStyle(r);
  };
  const tables=[];
  function walk(n){
@@ -139,7 +158,7 @@ function replaceTemplate(nodes,doc,month,total,project,lb,rt,hi,g){
          const baseRp=first(labelRun,'rPr'); if(baseRp) nr.appendChild(baseRp.cloneNode(true));
          const rr=first(nr,'rPr') || nr.appendChild(doc.createElementNS(WNS,'w:rPr'));
          const c=first(rr,'color') || rr.appendChild(doc.createElementNS(WNS,'w:color')); c.setAttribute('w:val','FF0000');
-         const nt=doc.createElementNS(WNS,'w:t');nt.textContent=money(total);nr.appendChild(nt);targetPs[0].appendChild(nr);
+         const nt=doc.createElementNS(WNS,'w:t');nt.textContent=money(total);nr.appendChild(nt);applyImportedStyle(nr);targetPs[0].appendChild(nr);
        }
      }
    }
@@ -167,6 +186,7 @@ function replaceTemplate(nodes,doc,month,total,project,lb,rt,hi,g){
    lines.forEach((line,idx)=>{
      const rr=idx===0?r:doc.createElementNS(WNS,'w:r');
      if(idx>0 && baseRp) rr.appendChild(baseRp.cloneNode(true));
+     applyImportedStyle(rr);
      const t=doc.createElementNS(WNS,'w:t');
      t.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');
      t.textContent=String(line??'');
@@ -208,7 +228,7 @@ function replaceTemplate(nodes,doc,month,total,project,lb,rt,hi,g){
        const baseRp=first(labelRun,'rPr'); if(baseRp) nr.appendChild(baseRp.cloneNode(true));
        const rr=first(nr,'rPr') || nr.appendChild(doc.createElementNS(WNS,'w:rPr'));
        const c=first(rr,'color') || rr.appendChild(doc.createElementNS(WNS,'w:color')); c.setAttribute('w:val','FF0000');
-       const nt=doc.createElementNS(WNS,'w:t');nt.textContent=chineseMoney(total);nr.appendChild(nt);targetPs[0].appendChild(nr);
+       const nt=doc.createElementNS(WNS,'w:t');nt.textContent=chineseMoney(total);nr.appendChild(nt);applyImportedStyle(nr);targetPs[0].appendChild(nr);
      }
    }
  }
