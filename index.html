@@ -156,6 +156,8 @@ function replaceTemplate(nodes,doc,month,total,project,g){
  const firstData=6;if(footerRow<=firstData)throw new Error('Word 範本沒有可用的資料列。');
  const sampleRow=trs[firstData].cloneNode(true);
  const cells=row=>q(row,'tc');
+ const ensureTcPr=(tc)=>{if(!tc)return null;let tcPr=first(tc,'tcPr');if(!tcPr){tcPr=doc.createElementNS(WNS,'w:tcPr');tc.insertBefore(tcPr,tc.firstChild||null)}return tcPr};
+ const setVMerge=(tc,val)=>{const tcPr=ensureTcPr(tc);if(!tcPr)return;let vm=first(tcPr,'vMerge');if(!vm){vm=doc.createElementNS(WNS,'w:vMerge');tcPr.appendChild(vm)}vm.setAttribute('w:val',val)};
  const y=month.slice(0,3),m=month.slice(4,6);
  // 表頭月份與總金額
  const r3=cells(trs[3]);if(r3[1]){const ps=q(r3[1],'p');if(ps[0])setParagraphText(ps[0],y+'年'+m+'月')}
@@ -179,19 +181,17 @@ function replaceTemplate(nodes,doc,month,total,project,g){
  dataRows.forEach((row,i)=>{
    const cs=cells(row);
    if(cs[1]){
-     const tcPr=cs[1].getElementsByTagNameNS(WNS,'tcPr')[0]||cs[1].insertBefore(doc.createElementNS(WNS,'w:tcPr'),cs[1].firstChild);
-     let vm=tcPr.getElementsByTagNameNS(WNS,'vMerge')[0];if(!vm){vm=doc.createElementNS(WNS,'w:vMerge');tcPr.appendChild(vm)}vm.setAttribute('w:val',i===0?'restart':'continue');
+     setVMerge(cs[1],i===0?'restart':'continue');
      const ps=q(cs[1],'p');if(ps[0])setParagraphText(ps[0],i===0?project:'');
    }
    if(cs[5]){
-     const tcPr=cs[5].getElementsByTagNameNS(WNS,'tcPr')[0]||cs[5].insertBefore(doc.createElementNS(WNS,'w:tcPr'),cs[5].firstChild);
-     let vm=tcPr.getElementsByTagNameNS(WNS,'vMerge')[0];if(!vm){vm=doc.createElementNS(WNS,'w:vMerge');tcPr.appendChild(vm)}vm.setAttribute('w:val',i===0?'restart':'continue');
+     setVMerge(cs[5],i===0?'restart':'continue');
      // 保留範本附註文字，只放在第一列。
-     if(i>0){const ps=q(cs[5],'p');if(ps[0])setParagraphText(ps[5],'');}
+     if(i>0){const ps=q(cs[5],'p');if(ps[0])setParagraphText(ps[0],'');}
    }
  });
  // 相同保險項目連續時合併「用途別科目名稱」欄。
- let pos=0;while(pos<dataRows.length){const item=itemGroups[pos].item;let end=pos+1;while(end<dataRows.length&&itemGroups[end].item===item)end++;for(let i=pos;i<end;i++){const cs=cells(dataRows[i]);if(cs[2]){const tcPr=cs[2].getElementsByTagNameNS(WNS,'tcPr')[0]||cs[2].insertBefore(doc.createElementNS(WNS,'w:tcPr'),cs[2].firstChild);let vm=tcPr.getElementsByTagNameNS(WNS,'vMerge')[0];if(!vm){vm=doc.createElementNS(WNS,'w:vMerge');tcPr.appendChild(vm)}vm.setAttribute('w:val',i===pos?'restart':'continue')}}pos=end;}
+ let pos=0;while(pos<dataRows.length){const item=itemGroups[pos].item;let end=pos+1;while(end<dataRows.length&&itemGroups[end].item===item)end++;for(let i=pos;i<end;i++){const cs=cells(dataRows[i]);if(cs[2]){setVMerge(cs[2],i===pos?'restart':'continue')}}pos=end;}
  // 插入資料列至合計列之前。
  const totalRow=rows().find(tr=>text(tr).includes('合計新台幣'));if(!totalRow)throw new Error('找不到合計列。');dataRows.forEach(row=>tbl.insertBefore(row,totalRow));
  // 合計中文大寫。
