@@ -44,18 +44,47 @@ function doQuery(){
  if(!hs.length){alert('請輸入業務承辦人身分證號後4碼。');return} if(s&&e&&s>e){alert('起始保險年月不可晚於結束保險年月。');return}
  loadData().then(()=>{lastHandlerCodes=hs;lastResults=rows.filter(r=>handlerTokens(r['業務承辦人證號']).some(code=>hs.includes(code))).filter(r=>{let mv=monthValue(r['保險年月']);return mv!=null&&(!s||mv>=s)&&(!e||mv<=e)});render();}).catch(err=>alert(err.message));
 }
+function getSelectedHandlerNames(){
+ const names=[];
+ lastResults.forEach(r=>{
+   const codes=handlerTokens(r['業務承辦人證號']);
+   const ns=handlerTokens(r['業務承辦人姓名']);
+   codes.forEach((code,i)=>{
+     if(lastHandlerCodes.includes(code)){
+       const nm=String(ns[i]??'').trim();
+       if(nm&&!names.includes(nm)) names.push(nm);
+     }
+   });
+ });
+ return names.join('、');
+}
+function insuranceLabel(v){return String(v??'').trim()}
 function render(){
- document.getElementById('excelBtn').disabled=!lastResults.length;document.getElementById('wordBtn').disabled=!lastResults.length;
+ document.getElementById('excelBtn').disabled=!lastResults.length;
+ document.getElementById('wordBtn').disabled=!lastResults.length;
  if(!lastResults.length){document.getElementById('summary').innerHTML='';document.getElementById('result').innerHTML='<div class="empty">查無符合條件的資料。</div>';return}
- const names=[]; lastResults.forEach(r=>handlerTokens(r['業務承辦人證號']).forEach((code,i)=>{if(lastHandlerCodes.includes(code)){const ns=handlerTokens(r['業務承辦人姓名']); const nm=String(ns[i]??'').trim(); if(nm&&!names.includes(nm)) names.push(nm)}})); const name=names.join('、');
- const lb=lastResults.reduce((a,r)=>a+num(r['勞工保險費']),0),rt=lastResults.reduce((a,r)=>a+num(r['勞工退休金提繳']),0),hi=lastResults.reduce((a,r)=>a+num(r['全民健康保險費']),0);
- document.getElementById('summary').innerHTML=`業務承辦人：<strong>${esc(name)}</strong>　資料筆數：<strong>${lastResults.length}</strong>　勞保費：<strong>${money(lb)}</strong>　勞退提繳：<strong>${money(rt)}</strong>　健保費：<strong>${money(hi)}</strong>　合計：<strong>${money(lb+rt+hi)}</strong>`;
- let html='<table class="result"><thead><tr><th>序號</th><th>單位</th><th>姓名</th><th>保險年月</th><th>投保薪額</th><th>勞工保險費</th><th>勞工退休金提繳</th><th>全民健康保險費</th><th>異動</th><th>備註</th><th>計畫名稱</th></tr></thead><tbody>';
- lastResults.forEach((r,i)=>{html+=`<tr><td>${i+1}</td><td>${esc(r['單位'])}</td><td class="no-wrap">${esc(r['姓名'])}</td><td class="no-wrap">${fmtMonth(r['保險年月'])}</td><td class="no-wrap">${money(r['投保薪額'])}</td><td class="no-wrap">${money(r['勞工保險費'])}</td><td class="no-wrap">${money(r['勞工退休金提繳'])}</td><td class="no-wrap">${money(r['全民健康保險費'])}</td><td>${esc(r['異動'])}</td><td>${esc(r['備註'])}</td><td>${esc(r['計畫名稱'])}</td></tr>`});
+ const handlerName=getSelectedHandlerNames();
+ const total=lastResults.reduce((a,r)=>a+num(r['雇主負擔保費']),0);
+ const byItem=new Map();
+ lastResults.forEach(r=>{const k=insuranceLabel(r['保險項目']);byItem.set(k,(byItem.get(k)||0)+num(r['雇主負擔保費']));});
+ const itemSummary=Array.from(byItem.entries()).map(([k,v])=>`${k}：${money(v)}`).join('　');
+ document.getElementById('summary').innerHTML=`業務承辦人：<strong>${esc(handlerName)}</strong>　資料筆數：<strong>${lastResults.length}</strong>　${esc(itemSummary)}　合計：<strong>${money(total)}</strong>`;
+ let html='<table class="result"><thead><tr><th>序號</th><th>單位</th><th>姓名</th><th>保險年月</th><th>保險項目</th><th>投保薪額</th><th>雇主負擔保費</th><th>異動</th><th>備註</th><th>預算編號</th><th>計畫名稱</th></tr></thead><tbody>';
+ lastResults.forEach((r,i)=>{html+=`<tr><td>${i+1}</td><td>${esc(r['單位'])}</td><td class="no-wrap">${esc(r['姓名'])}</td><td class="no-wrap">${fmtMonth(r['保險年月'])}</td><td>${esc(r['保險項目'])}</td><td class="no-wrap">${money(r['投保薪額'])}</td><td class="no-wrap">${money(r['雇主負擔保費'])}</td><td>${esc(r['異動'])}</td><td>${esc(r['備註'])}</td><td class="no-wrap">${esc(r['預算編號'])}</td><td>${esc(r['計畫名稱'])}</td></tr>`});
  html+=`</tbody></table>`;document.getElementById('result').innerHTML=html;
 }
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-function exportExcel(){if(!lastResults.length)return;let out=lastResults.map((r,i)=>{let x={...r};x['序號']=i+1;const codes=handlerTokens(r['業務承辦人證號']), names=handlerTokens(r['業務承辦人姓名']);const selectedNames=[];codes.forEach((code,idx)=>{if(lastHandlerCodes.includes(code)){const nm=String(names[idx]??'').trim();if(nm&&!selectedNames.includes(nm))selectedNames.push(nm)}});x['業務承辦人證號']=lastHandlerCodes.join(',');x['業務承辦人姓名']=selectedNames.join('、');return x});let ws=XLSX.utils.json_to_sheet(out);let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'查詢結果');XLSX.writeFile(wb,'專案計畫人員保費查詢結果.xlsx')}
+function exportExcel(){
+ if(!lastResults.length)return;
+ const out=lastResults.map((r,i)=>{
+   let x={...r};x['序號']=i+1;
+   const codes=handlerTokens(r['業務承辦人證號']), names=handlerTokens(r['業務承辦人姓名']);
+   const selectedNames=[];codes.forEach((code,idx)=>{if(lastHandlerCodes.includes(code)){const nm=String(names[idx]??'').trim();if(nm&&!selectedNames.includes(nm))selectedNames.push(nm)}});
+   x['業務承辦人證號']=lastHandlerCodes.join(',');x['業務承辦人姓名']=selectedNames.join('、');
+   return x;
+ });
+ let ws=XLSX.utils.json_to_sheet(out);let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'查詢結果');XLSX.writeFile(wb,'專案計畫人員保費查詢結果.xlsx');
+}
 function chineseMoney(n){
  n=Math.round(num(n));if(n===0)return'零元整';const d=['零','壹','貳','參','肆','伍','陸','柒','捌','玖'];const units=['','拾','佰','仟'];
  function section(x){let s='',zero=false;for(let i=0;i<4;i++){let q=x%10;x=Math.floor(x/10);if(q){s=d[q]+units[i]+s;zero=false}else if(s&&!zero){s='零'+s;zero=true}}return s.replace(/^零/,'').replace(/零+/g,'零').replace(/零$/,'')}
@@ -64,174 +93,85 @@ function chineseMoney(n){
 async function exportAllocationDocx(){
  if(!lastResults.length)return;
  try{
-  const groups=new Map();lastResults.forEach(r=>{const key=fmtMonth(r['保險年月'])+'||'+String(r['計畫名稱']??'').trim();if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r)});
+  const groups=new Map();
+  lastResults.forEach(r=>{
+   const key=fmtMonth(r['保險年月'])+'||'+String(r['計畫名稱']??'').trim();
+   if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);
+  });
   const resp=await fetch('./支出科目分攤表範本.docx?'+Date.now());if(!resp.ok)throw new Error('無法讀取支出科目分攤表範本。');
   const zip=await JSZip.loadAsync(await resp.arrayBuffer());const xml=await zip.file('word/document.xml').async('string');
   const parser=new DOMParser(),doc=parser.parseFromString(xml,'application/xml'),body=doc.getElementsByTagName('w:body')[0],sect=body.lastElementChild;
   const base=Array.from(body.childNodes).filter(n=>n!==sect).map(n=>n.cloneNode(true));
   while(body.firstChild)body.removeChild(body.firstChild);
   const groupsArr=Array.from(groups.values());
-  groupsArr.forEach((g,idx)=>{const month=fmtMonth(g[0]['保險年月']),project=String(g[0]['計畫名稱']??'').trim();let lb=g.reduce((a,r)=>a+num(r['勞工保險費']),0),rt=g.reduce((a,r)=>a+num(r['勞工退休金提繳']),0),hi=g.reduce((a,r)=>a+num(r['全民健康保險費']),0),total=lb+rt+hi;
-    const clones=base.map(n=>n.cloneNode(true));replaceTemplate(clones,doc,month,total,project,lb,rt,hi,g);clones.forEach(n=>body.appendChild(n));
-    if(idx<groupsArr.length-1){const WNS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';const p=doc.createElementNS(WNS,'w:p'),r=doc.createElementNS(WNS,'w:r'),br=doc.createElementNS(WNS,'w:br');br.setAttribute('w:type','page');r.appendChild(br);p.appendChild(r);body.appendChild(p)}
-  });body.appendChild(sect.cloneNode(true));
+  groupsArr.forEach((g,idx)=>{
+    const month=fmtMonth(g[0]['保險年月']),project=String(g[0]['計畫名稱']??'').trim();
+    const total=g.reduce((a,r)=>a+num(r['雇主負擔保費']),0);
+    const clones=base.map(n=>n.cloneNode(true));
+    replaceTemplate(clones,doc,month,total,project,g);
+    clones.forEach(n=>body.appendChild(n));
+    if(idx<groupsArr.length-1){
+      const WNS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';const p=doc.createElementNS(WNS,'w:p'),r=doc.createElementNS(WNS,'w:r'),br=doc.createElementNS(WNS,'w:br');br.setAttribute('w:type','page');r.appendChild(br);p.appendChild(r);body.appendChild(p);
+    }
+  });
+  body.appendChild(sect.cloneNode(true));
   const out=new XMLSerializer().serializeToString(doc);zip.file('word/document.xml',out);const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});downloadBlob(blob,'支出科目分攤表.docx');
  }catch(e){console.error(e);alert('匯出支出科目分攤表失敗：'+e.message)}
 }
-function replaceTemplate(nodes,doc,month,total,project,lb,rt,hi,g){
+function replaceTemplate(nodes,doc,month,total,project,g){
  const WNS='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
  const q=(n,tag)=>Array.from(n.getElementsByTagNameNS(WNS,tag));
  const first=(n,tag)=>q(n,tag)[0];
  const text=(n)=>q(n,'t').map(x=>x.textContent||'').join('');
  const applyImportedStyle=(run)=>{
-   let rp=first(run,'rPr');
-   if(!rp){rp=doc.createElementNS(WNS,'w:rPr');run.insertBefore(rp,run.firstChild)}
-   let rFonts=first(rp,'rFonts');
-   if(!rFonts){rFonts=doc.createElementNS(WNS,'w:rFonts');rp.insertBefore(rFonts,rp.firstChild)}
-   rFonts.setAttribute('w:ascii','DFKai-SB');
-   rFonts.setAttribute('w:hAnsi','DFKai-SB');
-   rFonts.setAttribute('w:eastAsia','標楷體');
-   rFonts.setAttribute('w:cs','DFKai-SB');
-   let sz=first(rp,'sz');
-   if(!sz){sz=doc.createElementNS(WNS,'w:sz');rp.appendChild(sz)}
-   sz.setAttribute('w:val','24');
-   let szCs=first(rp,'szCs');
-   if(!szCs){szCs=doc.createElementNS(WNS,'w:szCs');rp.appendChild(szCs)}
-   szCs.setAttribute('w:val','24');
-   let b=first(rp,'b');
-   if(!b){b=doc.createElementNS(WNS,'w:b');rp.appendChild(b)}
-   b.setAttribute('w:val','1');
-   let bCs=first(rp,'bCs');
-   if(!bCs){bCs=doc.createElementNS(WNS,'w:bCs');rp.appendChild(bCs)}
-   bCs.setAttribute('w:val','1');
-   let c=first(rp,'color');
-   if(!c){c=doc.createElementNS(WNS,'w:color');rp.appendChild(c)}
-   c.setAttribute('w:val','17365D');
+   let rp=first(run,'rPr');if(!rp){rp=doc.createElementNS(WNS,'w:rPr');run.insertBefore(rp,run.firstChild)}
+   let rFonts=first(rp,'rFonts');if(!rFonts){rFonts=doc.createElementNS(WNS,'w:rFonts');rp.insertBefore(rFonts,rp.firstChild)}
+   rFonts.setAttribute('w:ascii','DFKai-SB');rFonts.setAttribute('w:hAnsi','DFKai-SB');rFonts.setAttribute('w:eastAsia','標楷體');rFonts.setAttribute('w:cs','DFKai-SB');
+   let sz=first(rp,'sz');if(!sz){sz=doc.createElementNS(WNS,'w:sz');rp.appendChild(sz)}sz.setAttribute('w:val','24');
+   let szCs=first(rp,'szCs');if(!szCs){szCs=doc.createElementNS(WNS,'w:szCs');rp.appendChild(szCs)}szCs.setAttribute('w:val','24');
+   let b=first(rp,'b');if(!b){b=doc.createElementNS(WNS,'w:b');rp.appendChild(b)}b.setAttribute('w:val','1');
+   let bCs=first(rp,'bCs');if(!bCs){bCs=doc.createElementNS(WNS,'w:bCs');rp.appendChild(bCs)}bCs.setAttribute('w:val','1');
+   let c=first(rp,'color');if(!c){c=doc.createElementNS(WNS,'w:color');rp.appendChild(c)}c.setAttribute('w:val','17365D');
  };
- const setParagraphText=(p,value,colorRed=false)=>{
-   // 只清除該資料段落內原有文字；不動表格框線、列高、對齊等格式。
-   q(p,'t').forEach(t=>t.textContent='');
-   let r=q(p,'r')[0];
-   if(!r){
-     r=doc.createElementNS(WNS,'w:r');
-     p.appendChild(r);
-   }
-   // 若原本有 run，沿用其字型等設定；若沒有則建立最基本 run。
-   let t=first(r,'t');
-   if(!t){t=doc.createElementNS(WNS,'w:t');r.appendChild(t)}
-   if(/^\s|\s$/.test(String(value))) t.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');
-   t.textContent=String(value??'');
-   applyImportedStyle(r);
+ const setParagraphText=(p,value)=>{
+   q(p,'t').forEach(t=>t.textContent='');q(p,'br').forEach(br=>br.parentNode.removeChild(br));
+   let r=q(p,'r')[0];if(!r){r=doc.createElementNS(WNS,'w:r');p.appendChild(r)}
+   let t=first(r,'t');if(!t){t=doc.createElementNS(WNS,'w:t');r.appendChild(t)}
+   t.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');t.textContent=String(value??'');applyImportedStyle(r);
  };
- const tables=[];
- function walk(n){
-   if(n.nodeType===1 && n.namespaceURI===WNS && n.localName==='tbl') tables.push(n);
-   Array.from(n.childNodes||[]).forEach(walk);
- }
- nodes.forEach(walk);
- const tbl=tables[0];
- if(!tbl) throw new Error('Word 範本找不到主要表格。');
- const rows=q(tbl,'tr');
- if(rows.length<10) throw new Error('Word 範本表格結構與預期不同。');
- const cells=row=>q(row,'tc');
- const y=month.slice(0,3),m=month.slice(4,6);
- // 1. 表頭：所屬年度月份
- const r3=cells(rows[3]);
- // 本範本第4列實際 XML 結構為：月份標籤、月份資料格、總金額標籤、總金額資料格。
- // 「所屬年度月份：」保留在左側標籤格，月份資料寫入右側獨立儲存格。
- if(r3[1]){
-   const targetPs=q(r3[1],'p');
-   if(targetPs[0]){
-     setParagraphText(targetPs[0], y+'年'+m+'月', true);
-   }
- }
- // 2. 表頭：總金額
- if(r3[2]){
-   const ps=q(r3[2],'p');
-   if(ps[0]){
-     const rs=q(ps[0],'r');
-     const labelRun=rs.find(r=>text(r).includes('總金額新台幣：'));
-     if(labelRun && r3[3]){
-       const targetPs=q(r3[3],'p');
-       if(targetPs[0]){
-         const nr=doc.createElementNS(WNS,'w:r');
-         const baseRp=first(labelRun,'rPr'); if(baseRp) nr.appendChild(baseRp.cloneNode(true));
-         const rr=first(nr,'rPr') || nr.appendChild(doc.createElementNS(WNS,'w:rPr'));
-         const c=first(rr,'color') || rr.appendChild(doc.createElementNS(WNS,'w:color')); c.setAttribute('w:val','FF0000');
-         const nt=doc.createElementNS(WNS,'w:t');nt.textContent=money(total);nr.appendChild(nt);applyImportedStyle(nr);targetPs[0].appendChild(nr);
-       }
-     }
-   }
- }
- // 3. 表格資料列：PDF 樣張的三列依序為勞保、勞退、健保；計畫名稱位於第1列。
- const data=[
-   ['勞保費',money(lb),g.map(r=>String(r['姓名']??'').trim() + money(r['勞工保險費']))],
-   ['勞退提繳',money(rt),g.map(r=>String(r['姓名']??'').trim() + money(r['勞工退休金提繳']))],
-   ['健保費',money(hi),g.map(r=>String(r['姓名']??'').trim() + money(r['全民健康保險費']))]
- ];
  const setParagraphLines=(p,lines)=>{
-   const oldRuns=q(p,'r');
-   const templateRun=oldRuns[0] || null;
-   // 清除原有文字與換行，但保留段落本身的版面格式。
-   q(p,'t').forEach(t=>t.textContent='');
-   q(p,'br').forEach(br=>br.parentNode.removeChild(br));
-   q(p,'tab').forEach(tab=>tab.parentNode.removeChild(tab));
-   // 保留第一個 run 作為字型格式範本，其餘文字 run 清空。
-   oldRuns.slice(1).forEach(r=>{ q(r,'t').forEach(t=>t.textContent=''); q(r,'br').forEach(br=>br.parentNode.removeChild(br)); });
-   let r=templateRun;
-   if(!r){r=doc.createElementNS(WNS,'w:r');p.appendChild(r)}
-   const baseRp=first(r,'rPr') ? first(r,'rPr').cloneNode(true) : null;
-   while(r.firstChild) r.removeChild(r.firstChild);
-   if(baseRp) r.appendChild(baseRp);
-   lines.forEach((line,idx)=>{
-     const rr=idx===0?r:doc.createElementNS(WNS,'w:r');
-     if(idx>0 && baseRp) rr.appendChild(baseRp.cloneNode(true));
-     applyImportedStyle(rr);
-     const t=doc.createElementNS(WNS,'w:t');
-     t.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');
-     t.textContent=String(line??'');
-     rr.appendChild(t);
-     if(idx>0)p.appendChild(rr);
-     if(idx<lines.length-1){
-       const br=doc.createElementNS(WNS,'w:br');
-       rr.appendChild(br);
-     }
-   });
+   const oldRuns=q(p,'r');let templateRun=oldRuns[0]||null;
+   q(p,'t').forEach(t=>t.textContent='');q(p,'br').forEach(br=>br.parentNode.removeChild(br));
+   oldRuns.slice(1).forEach(r=>{q(r,'t').forEach(t=>t.textContent='');q(r,'br').forEach(br=>br.parentNode.removeChild(br));});
+   let r=templateRun;if(!r){r=doc.createElementNS(WNS,'w:r');p.appendChild(r)}
+   const baseRp=first(r,'rPr')?first(r,'rPr').cloneNode(true):null;while(r.firstChild)r.removeChild(r.firstChild);if(baseRp)r.appendChild(baseRp);
+   lines.forEach((line,idx)=>{const rr=idx===0?r:doc.createElementNS(WNS,'w:r');if(idx>0&&baseRp)rr.appendChild(baseRp.cloneNode(true));applyImportedStyle(rr);const t=doc.createElementNS(WNS,'w:t');t.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');t.textContent=String(line??'');rr.appendChild(t);if(idx>0)p.appendChild(rr);if(idx<lines.length-1)rr.appendChild(doc.createElementNS(WNS,'w:br'));});
  };
- data.forEach((item,i)=>{
-   const cs=cells(rows[6+i]);
-   if(cs[2]){
-     const ps=q(cs[2],'p'); if(ps[0]) setParagraphText(ps[0],item[0]);
-   }
-   if(cs[3]){
-     const ps=q(cs[3],'p'); if(ps[0]) setParagraphText(ps[0],item[1]);
-   }
-   // 說明欄：每位被保險人一行，格式為「姓名＋該項保險費」，例如：嚴麟4072。
-   if(cs[4]){
-     const ps=q(cs[4],'p'); if(ps[0]) setParagraphLines(ps[0],item[2]);
-   }
- });
- // 計畫名稱只填第一列，因為第1列至第3列在 Word 範本中為同一個垂直合併區。
- const row6cells=cells(rows[6]);
- if(row6cells[1]){
-   const ps=q(row6cells[1],'p'); if(ps[0]) setParagraphText(ps[0],project);
- }
- // 4. 底部中文大寫合計
- const r9=cells(rows[9]);
- if(r9[0] && r9[1]){
-   const labelPs=q(r9[0],'p');
-   const targetPs=q(r9[1],'p');
-   if(labelPs[0] && targetPs[0]){
-     const labelRun=q(labelPs[0],'r').find(r=>text(r).includes('合計新台幣'));
-     if(labelRun){
-       const nr=doc.createElementNS(WNS,'w:r');
-       const baseRp=first(labelRun,'rPr'); if(baseRp) nr.appendChild(baseRp.cloneNode(true));
-       const rr=first(nr,'rPr') || nr.appendChild(doc.createElementNS(WNS,'w:rPr'));
-       const c=first(rr,'color') || rr.appendChild(doc.createElementNS(WNS,'w:color')); c.setAttribute('w:val','FF0000');
-       const nt=doc.createElementNS(WNS,'w:t');nt.textContent=chineseMoney(total);nr.appendChild(nt);applyImportedStyle(nr);targetPs[0].appendChild(nr);
-     }
-   }
- }
+ const tables=[];function walk(n){if(n.nodeType===1&&n.namespaceURI===WNS&&n.localName==='tbl')tables.push(n);Array.from(n.childNodes||[]).forEach(walk)}nodes.forEach(walk);const tbl=tables[0];if(!tbl)throw new Error('Word 範本找不到主要表格。');
+ const rows=()=>q(tbl,'tr');let trs=rows();if(trs.length<13)throw new Error('Word 範本表格結構與預期不同。');
+ const cells=row=>q(row,'tc');const y=month.slice(0,3),m=month.slice(4,6);
+ // 表頭月份與總金額
+ const r3=cells(trs[3]);if(r3[1]){const ps=q(r3[1],'p');if(ps[0])setParagraphText(ps[0],y+'年'+m+'月')}
+ if(r3[3]){const ps=q(r3[3],'p');if(ps[0])setParagraphText(ps[0],money(total))}
+ // 先移除範本既有資料列（第6列至合計列前），再依實際分組動態建立。
+ const footerRow=trs.findIndex((tr,i)=>text(tr).includes('合計新台幣')); if(footerRow<0)throw new Error('Word 範本找不到合計列。');
+ const firstData=6;for(let i=footerRow-1;i>=firstData;i--)tbl.removeChild(trs[i]);
+ // 以原範本第10列樣式作為資料列樣板（它位於 footer 前），若已被移除則使用原先抓到的 row 10 clone。
+ const templateRow=nodes.flatMap(n=>[]); // placeholder, actual row clone saved below
+ // 重新從原始 nodes 中找出資料列樣板：使用原 document 目前未刪除的 base 節點中的 table。
+ let sampleRow=null;const allTables=[];function findTbl(n){if(n.nodeType===1&&n.namespaceURI===WNS&&n.localName==='tbl')allTables.push(n);Array.from(n.childNodes||[]).forEach(findTbl)}nodes.forEach(findTbl);const sampleTbl=allTables[0];if(sampleTbl){const sampleRows=q(sampleTbl,'tr');sampleRow=sampleRows[Math.min(10,sampleRows.length-2)]?.cloneNode(true)}
+ if(!sampleRow)throw new Error('無法建立 Word 資料列。');
+ // 建立「保險項目＋預算編號」分組，順序依 Excel 首次出現順序。
+ const itemGroups=[];const map=new Map();g.forEach(r=>{const item=insuranceLabel(r['保險項目']),code=String(r['預算編號']??'').trim();const key=item+'||'+code;if(!map.has(key)){const obj={item,code,rows:[],total:0};map.set(key,obj);itemGroups.push(obj)}const obj=map.get(key);obj.rows.push(r);obj.total+=num(r['雇主負擔保費'])});
+ const dataRows=[];itemGroups.forEach(obj=>{const row=sampleRow.cloneNode(true);const cs=cells(row);if(cs[0]){const ps=q(cs[0],'p');if(ps[0])setParagraphText(ps[0],obj.code)}if(cs[2]){const ps=q(cs[2],'p');if(ps[0])setParagraphText(ps[0],obj.item)}if(cs[3]){const ps=q(cs[3],'p');if(ps[0])setParagraphText(ps[0],money(obj.total))}if(cs[4]){const ps=q(cs[4],'p');if(ps[0])setParagraphLines(ps[0],obj.rows.map(r=>String(r['姓名']??'').trim()+' '+money(r['雇主負擔保費'])))}dataRows.push(row)});
+ // 第一列計畫名稱；同一計畫跨所有資料列垂直合併
+ dataRows.forEach((row,i)=>{const cs=cells(row);if(cs[1]){const tcPr=cs[1].getElementsByTagNameNS(WNS,'tcPr')[0]||cs[1].insertBefore(doc.createElementNS(WNS,'w:tcPr'),cs[1].firstChild);let vm=tcPr.getElementsByTagNameNS(WNS,'vMerge')[0];if(!vm){vm=doc.createElementNS(WNS,'w:vMerge');tcPr.appendChild(vm)}vm.setAttribute('w:val',i===0?'restart':'continue');const ps=q(cs[1],'p');if(ps[0]){if(i===0)setParagraphText(ps[0],project);else setParagraphText(ps[0],'')}}});
+ // 相同保險項目連續時合併用途別科目名稱欄
+ let pos=0;while(pos<dataRows.length){const item= itemGroups[pos].item;let end=pos+1;while(end<dataRows.length&&itemGroups[end].item===item)end++;for(let i=pos;i<end;i++){const cs=cells(dataRows[i]);if(cs[2]){const tcPr=cs[2].getElementsByTagNameNS(WNS,'tcPr')[0]||cs[2].insertBefore(doc.createElementNS(WNS,'w:tcPr'),cs[2].firstChild);let vm=tcPr.getElementsByTagNameNS(WNS,'vMerge')[0];if(!vm){vm=doc.createElementNS(WNS,'w:vMerge');tcPr.appendChild(vm)}vm.setAttribute('w:val',i===pos?'restart':'continue')}}pos=end;}
+ // 將資料列插入合計列之前
+ const freshRows=q(tbl,'tr');const totalRow=freshRows.find(tr=>text(tr).includes('合計新台幣'));if(!totalRow)throw new Error('找不到合計列。');dataRows.forEach(row=>tbl.insertBefore(row,totalRow));
+ // 合計中文大寫
+ const rTotal=cells(totalRow);if(rTotal[1]){const ps=q(rTotal[1],'p');if(ps[0])setParagraphText(ps[0],chineseMoney(total))}
 }
 function openBudgetPdf(){
  const w=window.open('./薪級及保險費預算表.pdf','_blank');
