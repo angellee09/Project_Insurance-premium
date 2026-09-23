@@ -147,30 +147,54 @@ function replaceTemplate(nodes,doc,month,total,project,g){
    const baseRp=first(r,'rPr')?first(r,'rPr').cloneNode(true):null;while(r.firstChild)r.removeChild(r.firstChild);if(baseRp)r.appendChild(baseRp);
    lines.forEach((line,idx)=>{const rr=idx===0?r:doc.createElementNS(WNS,'w:r');if(idx>0&&baseRp)rr.appendChild(baseRp.cloneNode(true));applyImportedStyle(rr);const t=doc.createElementNS(WNS,'w:t');t.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');t.textContent=String(line??'');rr.appendChild(t);if(idx>0)p.appendChild(rr);if(idx<lines.length-1)rr.appendChild(doc.createElementNS(WNS,'w:br'));});
  };
- const tables=[];function walk(n){if(n.nodeType===1&&n.namespaceURI===WNS&&n.localName==='tbl')tables.push(n);Array.from(n.childNodes||[]).forEach(walk)}nodes.forEach(walk);const tbl=tables[0];if(!tbl)throw new Error('Word 範本找不到主要表格。');
- const rows=()=>q(tbl,'tr');let trs=rows();if(trs.length<13)throw new Error('Word 範本表格結構與預期不同。');
- const cells=row=>q(row,'tc');const y=month.slice(0,3),m=month.slice(4,6);
+ const tables=[];function walk(n){if(n.nodeType===1&&n.namespaceURI===WNS&&n.localName==='tbl')tables.push(n);Array.from(n.childNodes||[]).forEach(walk)}nodes.forEach(walk);
+ const tbl=tables[0];if(!tbl)throw new Error('Word 範本找不到主要表格。');
+ const rows=()=>Array.from(tbl.childNodes).filter(n=>n.nodeType===1&&n.namespaceURI===WNS&&n.localName==='tr');
+ let trs=rows();
+ // 空白範本實際為 10 列：第 7～9 列（索引 6～8）為可供複製的資料列，第 10 列為合計列。
+ const footerRow=trs.findIndex(tr=>text(tr).includes('合計新台幣'));if(footerRow<0)throw new Error('Word 範本找不到合計列。');
+ const firstData=6;if(footerRow<=firstData)throw new Error('Word 範本沒有可用的資料列。');
+ const sampleRow=trs[firstData].cloneNode(true);
+ const cells=row=>q(row,'tc');
+ const y=month.slice(0,3),m=month.slice(4,6);
  // 表頭月份與總金額
  const r3=cells(trs[3]);if(r3[1]){const ps=q(r3[1],'p');if(ps[0])setParagraphText(ps[0],y+'年'+m+'月')}
  if(r3[3]){const ps=q(r3[3],'p');if(ps[0])setParagraphText(ps[0],money(total))}
- // 先移除範本既有資料列（第6列至合計列前），再依實際分組動態建立。
- const footerRow=trs.findIndex((tr,i)=>text(tr).includes('合計新台幣')); if(footerRow<0)throw new Error('Word 範本找不到合計列。');
- const firstData=6;for(let i=footerRow-1;i>=firstData;i--)tbl.removeChild(trs[i]);
- // 以原範本第10列樣式作為資料列樣板（它位於 footer 前），若已被移除則使用原先抓到的 row 10 clone。
- const templateRow=nodes.flatMap(n=>[]); // placeholder, actual row clone saved below
- // 重新從原始 nodes 中找出資料列樣板：使用原 document 目前未刪除的 base 節點中的 table。
- let sampleRow=null;const allTables=[];function findTbl(n){if(n.nodeType===1&&n.namespaceURI===WNS&&n.localName==='tbl')allTables.push(n);Array.from(n.childNodes||[]).forEach(findTbl)}nodes.forEach(findTbl);const sampleTbl=allTables[0];if(sampleTbl){const sampleRows=q(sampleTbl,'tr');sampleRow=sampleRows[Math.min(10,sampleRows.length-2)]?.cloneNode(true)}
- if(!sampleRow)throw new Error('無法建立 Word 資料列。');
- // 建立「保險項目＋預算編號」分組，順序依 Excel 首次出現順序。
- const itemGroups=[];const map=new Map();g.forEach(r=>{const item=insuranceLabel(r['保險項目']),code=String(r['預算編號']??'').trim();const key=item+'||'+code;if(!map.has(key)){const obj={item,code,rows:[],total:0};map.set(key,obj);itemGroups.push(obj)}const obj=map.get(key);obj.rows.push(r);obj.total+=num(r['雇主負擔保費'])});
- const dataRows=[];itemGroups.forEach(obj=>{const row=sampleRow.cloneNode(true);const cs=cells(row);if(cs[0]){const ps=q(cs[0],'p');if(ps[0])setParagraphText(ps[0],obj.code)}if(cs[2]){const ps=q(cs[2],'p');if(ps[0])setParagraphText(ps[0],obj.item)}if(cs[3]){const ps=q(cs[3],'p');if(ps[0])setParagraphText(ps[0],money(obj.total))}if(cs[4]){const ps=q(cs[4],'p');if(ps[0])setParagraphLines(ps[0],obj.rows.map(r=>String(r['姓名']??'').trim()+' '+money(r['雇主負擔保費'])))}dataRows.push(row)});
- // 第一列計畫名稱；同一計畫跨所有資料列垂直合併
- dataRows.forEach((row,i)=>{const cs=cells(row);if(cs[1]){const tcPr=cs[1].getElementsByTagNameNS(WNS,'tcPr')[0]||cs[1].insertBefore(doc.createElementNS(WNS,'w:tcPr'),cs[1].firstChild);let vm=tcPr.getElementsByTagNameNS(WNS,'vMerge')[0];if(!vm){vm=doc.createElementNS(WNS,'w:vMerge');tcPr.appendChild(vm)}vm.setAttribute('w:val',i===0?'restart':'continue');const ps=q(cs[1],'p');if(ps[0]){if(i===0)setParagraphText(ps[0],project);else setParagraphText(ps[0],'')}}});
- // 相同保險項目連續時合併用途別科目名稱欄
- let pos=0;while(pos<dataRows.length){const item= itemGroups[pos].item;let end=pos+1;while(end<dataRows.length&&itemGroups[end].item===item)end++;for(let i=pos;i<end;i++){const cs=cells(dataRows[i]);if(cs[2]){const tcPr=cs[2].getElementsByTagNameNS(WNS,'tcPr')[0]||cs[2].insertBefore(doc.createElementNS(WNS,'w:tcPr'),cs[2].firstChild);let vm=tcPr.getElementsByTagNameNS(WNS,'vMerge')[0];if(!vm){vm=doc.createElementNS(WNS,'w:vMerge');tcPr.appendChild(vm)}vm.setAttribute('w:val',i===pos?'restart':'continue')}}pos=end;}
- // 將資料列插入合計列之前
- const freshRows=q(tbl,'tr');const totalRow=freshRows.find(tr=>text(tr).includes('合計新台幣'));if(!totalRow)throw new Error('找不到合計列。');dataRows.forEach(row=>tbl.insertBefore(row,totalRow));
- // 合計中文大寫
+ // 移除範本原有的空白資料列，保留合計列。
+ trs=rows();for(let i=footerRow-1;i>=firstData;i--)tbl.removeChild(trs[i]);
+ // 建立「保險項目＋預算編號」分組：同項目同預算編號合併，不同預算編號分列。
+ const itemGroups=[];const map=new Map();
+ g.forEach(r=>{const item=insuranceLabel(r['保險項目']),code=String(r['預算編號']??'').trim();const key=item+'||'+code;if(!map.has(key)){const obj={item,code,rows:[],total:0};map.set(key,obj);itemGroups.push(obj)}const obj=map.get(key);obj.rows.push(r);obj.total+=num(r['雇主負擔保費'])});
+ const dataRows=[];
+ itemGroups.forEach(obj=>{
+   const row=sampleRow.cloneNode(true);const cs=cells(row);
+   if(cs[0]){const ps=q(cs[0],'p');if(ps[0])setParagraphText(ps[0],obj.code)}
+   if(cs[2]){const ps=q(cs[2],'p');if(ps[0])setParagraphText(ps[0],obj.item)}
+   if(cs[3]){const ps=q(cs[3],'p');if(ps[0])setParagraphText(ps[0],money(obj.total))}
+   if(cs[4]){const ps=q(cs[4],'p');if(ps[0])setParagraphLines(ps[0],obj.rows.map(r=>String(r['姓名']??'').trim()+' '+money(r['雇主負擔保費'])))}
+   dataRows.push(row);
+ });
+ if(!dataRows.length)throw new Error('查詢結果沒有可匯出的保費資料。');
+ // 計畫名稱欄跨所有資料列合併；空白範本的附註欄也跨所有資料列合併。
+ dataRows.forEach((row,i)=>{
+   const cs=cells(row);
+   if(cs[1]){
+     const tcPr=cs[1].getElementsByTagNameNS(WNS,'tcPr')[0]||cs[1].insertBefore(doc.createElementNS(WNS,'w:tcPr'),cs[1].firstChild);
+     let vm=tcPr.getElementsByTagNameNS(WNS,'vMerge')[0];if(!vm){vm=doc.createElementNS(WNS,'w:vMerge');tcPr.appendChild(vm)}vm.setAttribute('w:val',i===0?'restart':'continue');
+     const ps=q(cs[1],'p');if(ps[0])setParagraphText(ps[0],i===0?project:'');
+   }
+   if(cs[5]){
+     const tcPr=cs[5].getElementsByTagNameNS(WNS,'tcPr')[0]||cs[5].insertBefore(doc.createElementNS(WNS,'w:tcPr'),cs[5].firstChild);
+     let vm=tcPr.getElementsByTagNameNS(WNS,'vMerge')[0];if(!vm){vm=doc.createElementNS(WNS,'w:vMerge');tcPr.appendChild(vm)}vm.setAttribute('w:val',i===0?'restart':'continue');
+     // 保留範本附註文字，只放在第一列。
+     if(i>0){const ps=q(cs[5],'p');if(ps[0])setParagraphText(ps[5],'');}
+   }
+ });
+ // 相同保險項目連續時合併「用途別科目名稱」欄。
+ let pos=0;while(pos<dataRows.length){const item=itemGroups[pos].item;let end=pos+1;while(end<dataRows.length&&itemGroups[end].item===item)end++;for(let i=pos;i<end;i++){const cs=cells(dataRows[i]);if(cs[2]){const tcPr=cs[2].getElementsByTagNameNS(WNS,'tcPr')[0]||cs[2].insertBefore(doc.createElementNS(WNS,'w:tcPr'),cs[2].firstChild);let vm=tcPr.getElementsByTagNameNS(WNS,'vMerge')[0];if(!vm){vm=doc.createElementNS(WNS,'w:vMerge');tcPr.appendChild(vm)}vm.setAttribute('w:val',i===pos?'restart':'continue')}}pos=end;}
+ // 插入資料列至合計列之前。
+ const totalRow=rows().find(tr=>text(tr).includes('合計新台幣'));if(!totalRow)throw new Error('找不到合計列。');dataRows.forEach(row=>tbl.insertBefore(row,totalRow));
+ // 合計中文大寫。
  const rTotal=cells(totalRow);if(rTotal[1]){const ps=q(rTotal[1],'p');if(ps[0])setParagraphText(ps[0],chineseMoney(total))}
 }
 function openBudgetPdf(){
