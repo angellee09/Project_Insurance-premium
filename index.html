@@ -69,8 +69,8 @@ function render(){
  lastResults.forEach(r=>{const k=insuranceLabel(r['保險項目']);byItem.set(k,(byItem.get(k)||0)+num(r['雇主負擔保費']));});
  const itemSummary=Array.from(byItem.entries()).map(([k,v])=>`${k}：${money(v)}`).join('　');
  document.getElementById('summary').innerHTML=`業務承辦人：<strong>${esc(handlerName)}</strong>　資料筆數：<strong>${lastResults.length}</strong>　${esc(itemSummary)}　合計：<strong>${money(total)}</strong>`;
- let html='<table class="result"><thead><tr><th>序號</th><th>單位</th><th>姓名</th><th>保險年月</th><th>保險項目</th><th>投保薪額</th><th>雇主負擔保費</th><th>異動</th><th>備註</th><th>預算編號</th><th>計畫名稱</th></tr></thead><tbody>';
- lastResults.forEach((r,i)=>{html+=`<tr><td>${i+1}</td><td>${esc(r['單位'])}</td><td class="no-wrap">${esc(r['姓名'])}</td><td class="no-wrap">${fmtMonth(r['保險年月'])}</td><td>${esc(r['保險項目'])}</td><td class="no-wrap">${money(r['投保薪額'])}</td><td class="no-wrap">${money(r['雇主負擔保費'])}</td><td>${esc(r['異動'])}</td><td>${esc(r['備註'])}</td><td class="no-wrap">${esc(r['預算編號'])}</td><td>${esc(r['計畫名稱'])}</td></tr>`});
+ let html='<table class="result"><thead><tr><th>序號</th><th>單位</th><th>姓名</th><th>保險年月</th><th>保險項目</th><th>投保薪額</th><th>雇主負擔保費</th><th>異動</th><th>備註</th><th>已核對繳款單</th><th>預算編號</th><th>計畫名稱</th></tr></thead><tbody>';
+ lastResults.forEach((r,i)=>{html+=`<tr><td>${i+1}</td><td>${esc(r['單位'])}</td><td class="no-wrap">${esc(r['姓名'])}</td><td class="no-wrap">${fmtMonth(r['保險年月'])}</td><td>${esc(r['保險項目'])}</td><td class="no-wrap">${money(r['投保薪額'])}</td><td class="no-wrap">${money(r['雇主負擔保費'])}</td><td>${esc(r['異動'])}</td><td>${esc(r['備註'])}</td><td>${esc(r['已核對繳款單']??r['已核對帳單'])}</td><td class="no-wrap">${esc(r['預算編號'])}</td><td>${esc(r['計畫名稱'])}</td></tr>`});
  html+=`</tbody></table>`;document.getElementById('result').innerHTML=html;
 }
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
